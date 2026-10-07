@@ -1,7 +1,7 @@
 # Unnamed Tracking for Playnite
 
 A Playnite 10 companion extension for one-way library and save synchronization
-with an Unnamed Tracking account. **0.1.2 is the next, unreleased version.** The
+with an Unnamed Tracking account. **0.2.0 restores the recovered release.** The
 extension keeps the existing `net462` / PlayniteSDK 6.17.0 generic-plugin model.
 
 The maintained repository is [obsoletelabs/unnamed_tracking_playnite](https://github.com/obsoletelabs/unnamed_tracking_playnite).
@@ -10,6 +10,9 @@ Recovered on 2026-10-07 from commit
 it retains all 141 available historical commits and 18 original tags. The latest
 recovered tag is `v0.2.0-beta.3`, whose source declares version `0.1.2`; see the
 [recovered version history](wiki/docs/developer-guide/releases.md#recovered-version-history).
+The last downloaded `0.2.0` package was also recovered. Cached source from its
+`fd114c4` build confirms the C# and XAML files match this recovered baseline;
+the later changes concern release packaging, build configuration and documentation.
 
 - Authenticated full/selected-game sync, GUID matching, metadata and artwork.
 - Preview, per-game progress/cancellation, ignore tags, startup and game-stop sync.
@@ -50,10 +53,14 @@ if ($LASTEXITCODE -ne 0) { throw "Regression tests failed" }
 ./tests/test-packaging.ps1
 ```
 
-The PEXT is `artifacts/UnnamedTrackingPlaynite-0.1.2.pext` and contains exactly
+The PEXT is `artifacts/UnnamedTrackingPlaynite-0.2.0.pext` and contains exactly
 `UnnamedTrackingPlaynite.dll` and `extension.yaml` at its root. Toolbox is optional.
 For portable helper tests use `dotnet run --project tests/Companion.Tests -c Release -f net8.0`.
 No test framework or new extension runtime dependency is required.
+
+Release builds can use `./pack.ps1 -Version 0.2.0`. A `v<major.minor.patch>` tag
+sets the CI build version; MSBuild stamps the assembly and output manifest,
+and packaging validates that exact version before publishing the matching PEXT.
 
 ```sh
 python -m pip install -r wiki/requirements.txt
@@ -63,6 +70,6 @@ python -m mkdocs build --strict -f wiki/mkdocs.yml
 Both existing build workflows remain active, including package validation.
 Main/PR builds produce artifacts; release publication requires an intentional tag
 matching the manifest/project version. See [release notes](CHANGELOG.md) and
-[release process](wiki/docs/developer-guide/releases.md). This change publishes no release.
+[release process](wiki/docs/developer-guide/releases.md).
 Headless tests and builds do not claim full Playnite runtime testing; actual
 Playnite screenshots could not be obtained in the Linux environment.

@@ -1,6 +1,6 @@
 # Unnamed Tracking for Playnite
 
-Version **0.1.2** is the next, unreleased companion update. The extension remains a
+Version **0.2.0** restores the recovered companion release. The extension remains a
 Playnite 10 generic plugin targeting .NET Framework 4.6.2 with PlayniteSDK 6.17.0.
 It synchronizes your Playnite library to an Unnamed Tracking account, manages
 configured save archives, and provides access to the application's website.

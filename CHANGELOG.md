@@ -1,5 +1,20 @@
 # Release notes
 
+## 0.2.0 — 2026-10-07 recovery release
+
+- Restore release-version packaging from the cached 2026-10-03 source and last
+  downloaded `0.2.0` package; the recovered C# and XAML source is unchanged.
+- Pass the release tag version through MSBuild, the output manifest, assembly/file
+  versions, package validators and PEXT filename.
+- Preserve both recovered CI workflows and all validation checks, including
+  regression coverage for explicit version validation and empty manifest fields.
+- Update the maintained source/release links to `obsoletelabs/unnamed_tracking_playnite`.
+
+The original `0.2.0` package embeds source commit `fd114c4` from 2026-10-03.
+That commit's build/release configuration is restored where available and
+reconstructed where only metadata remains. Playnite runtime acceptance and real
+screenshots remain unverified. Breaking changes: None.
+
 ## 0.1.2 — Unreleased
 
 - Preserve GUID identity and remote storage folders when Playnite titles change;

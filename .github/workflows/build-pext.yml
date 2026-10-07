@@ -28,19 +28,33 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      - name: Determine build version
+        shell: pwsh
+        run: |
+          $versionLine = Get-Content 'src/UnnamedTrackingPlaynite/extension.yaml' |
+            Where-Object { $_ -match '^Version:\s*(.+)$' } |
+            Select-Object -First 1
+          if (-not $versionLine) { throw 'Could not determine extension version.' }
+          $version = ($versionLine -replace '^Version:\s*', '').Trim()
+          if ($env:GITHUB_REF.StartsWith('refs/tags/v')) {
+            $version = $env:GITHUB_REF_NAME.Substring(1)
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid build version '$version'." }
+          "BUILD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Restore
         run: dotnet restore src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj
 
       - name: Build
-        run: dotnet build src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj --configuration Release --no-restore
+        run: dotnet build src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj --configuration Release --no-restore -p:Version=${{ env.BUILD_VERSION }}
 
       - name: Package and validate PEXT
         shell: pwsh
-        run: ./pack.ps1 -NoBuild
+        run: ./pack.ps1 -NoBuild -Version "$env:BUILD_VERSION"
 
       - name: Test package validation
         shell: pwsh
-        run: ./tests/test-packaging.ps1
+        run: ./tests/test-packaging.ps1 -ExpectedVersion "$env:BUILD_VERSION"
 
       - name: Upload PEXT artifact
         uses: actions/upload-artifact@v4
@@ -54,7 +68,7 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
-          $versionLine = Get-Content 'src/UnnamedTrackingPlaynite/extension.yaml' |
+          $versionLine = Get-Content 'src/UnnamedTrackingPlaynite/bin/Release/net462/extension.yaml' |
             Where-Object { $_ -match '^Version:\s*(.+)$' } |
             Select-Object -First 1
           if (-not $versionLine) {

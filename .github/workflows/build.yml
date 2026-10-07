@@ -38,6 +38,20 @@ jobs:
         shell: pwsh
         run: ./tests/validate-extension.ps1 -ExtensionDirectory "src/UnnamedTrackingPlaynite/bin/Release/net462"
 
+      - name: Test release version packaging
+        shell: pwsh
+        run: |
+          $manifestPath = 'src/UnnamedTrackingPlaynite/extension.yaml'
+          $sourceHash = (Get-FileHash $manifestPath).Hash
+          dotnet build src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj -c Release --no-restore -p:Version=0.0.1
+          if ($LASTEXITCODE -ne 0) { throw 'Release-version build failed.' }
+          ./pack.ps1 -NoBuild -Version 0.0.1
+          ./tests/test-packaging.ps1 -ExpectedVersion 0.0.1
+          if ((Get-FileHash $manifestPath).Hash -ne $sourceHash) { throw 'Release build modified the source manifest.' }
+          dotnet build src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Default-version rebuild failed.' }
+          ./tests/validate-extension.ps1 -ExtensionDirectory 'src/UnnamedTrackingPlaynite/bin/Release/net462'
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

@@ -31,11 +31,17 @@ tests do not instantiate Playnite/WPF/CEF or prove runtime integration.
 
 The extension output is `src/UnnamedTrackingPlaynite/bin/Release/net462/`.
 `./pack.ps1` builds and validates it, then stages exactly the assembly and manifest
-and writes `artifacts/UnnamedTrackingPlaynite-0.1.2.pext`. No Playnite Toolbox
+and writes `artifacts/UnnamedTrackingPlaynite-0.2.0.pext`. No Playnite Toolbox
 installation is required. An explicit `-ToolboxPath` retains Toolbox support;
 its output must pass the same package validator. Build/Toolbox failures fail the
 script. `-NoBuild` is for already-built output; version validation rejects stale
 assemblies/manifests.
+
+Use `./pack.ps1 -Version <major.minor.patch>` for an explicit release version.
+MSBuild derives assembly/file versions from that version and stamps only the
+output manifest. Both validators accept `-ExpectedVersion` and require the built
+assembly, file version, manifest and package filename to agree. A release tag
+supplies this version in CI; the source manifest need not be edited for each tag.
 
 PEXT is ZIP. The script compresses to a `.zip` then renames it, avoiding the
 old assumption that PowerShell archive cmdlets accept `.pext` directly. Package
@@ -52,7 +58,8 @@ and adds the production helper harness on .NET Framework plus strict wiki build.
 **Build Playnite extension** retains extension restore/build, PEXT packaging,
 package validation and artifact upload, using the same packaging script as local
 builds. Both workflows remain enabled for PRs. Tags additionally build packages;
-release publication requires an intentional matching `v<version>` tag. Main/PR
+release publication requires an intentional `v<major.minor.patch>` tag matching
+the built package version. Main/PR
 builds produce artifacts without publishing a release.
 
 Generated `bin/`, `obj/`, `artifacts/`, PEXTs and wiki `site/` output are ignored.

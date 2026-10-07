@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$ExtensionDirectory
+    [string]$ExtensionDirectory,
+    [string]$ExpectedVersion = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,9 +13,9 @@ if (-not (Test-Path $manifestPath -PathType Leaf)) { throw "extension.yaml was n
 $manifest = Get-Content $manifestPath -Raw
 $fields = @{}
 foreach ($name in @("Id", "Name", "Author", "Version", "Module", "Type")) {
-    $matches = [regex]::Matches($manifest, "(?m)^${name}:\s*(\S[^\r\n]*)\r?$")
-    if ($matches.Count -ne 1) { throw "Manifest must contain exactly one non-empty '$name'." }
-    $fields[$name] = $matches[0].Groups[1].Value.Trim()
+    $fieldMatches = [regex]::Matches($manifest, "(?m)^${name}:[ \t]*(\S[^\r\n]*)\r?$")
+    if ($fieldMatches.Count -ne 1) { throw "Manifest must contain exactly one non-empty '$name'." }
+    $fields[$name] = $fieldMatches[0].Groups[1].Value.Trim()
 }
 if ($fields.Id -ne 'UnnamedTrackingPlaynite') { throw "The stable extension ID changed." }
 if ($fields.Type -ne 'GenericPlugin') { throw "Manifest Type must remain GenericPlugin." }
@@ -32,13 +33,14 @@ foreach ($file in Get-ChildItem $ExtensionDirectory -Recurse -File) {
 }
 $project = [xml](Get-Content (Join-Path $PSScriptRoot '../src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj') -Raw)
 $properties = $project.Project.PropertyGroup
-if ($fields.Version -ne $properties.Version -or
-    $properties.AssemblyVersion -ne "$($fields.Version).0" -or
-    $properties.FileVersion -ne "$($fields.Version).0") { throw "Project and manifest versions do not agree." }
+if (-not $ExpectedVersion) { $ExpectedVersion = $properties.Version }
+if ($ExpectedVersion -notmatch '^\d+\.\d+\.\d+$') { throw "Expected version must contain major.minor.patch." }
+if ($fields.Version -cne $ExpectedVersion) { throw "Manifest does not match expected version '$ExpectedVersion'." }
+$expectedAssemblyVersion = "$ExpectedVersion.0"
 $assembly = [System.Reflection.AssemblyName]::GetAssemblyName((Resolve-Path $modulePath))
-if ($assembly.Name -ne 'UnnamedTrackingPlaynite' -or $assembly.Version.ToString() -ne $properties.AssemblyVersion) {
+if ($assembly.Name -ne 'UnnamedTrackingPlaynite' -or $assembly.Version.ToString() -ne $expectedAssemblyVersion) {
     throw "Built assembly identity/version does not agree with the manifest and project."
 }
 $fileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $modulePath))
-if ($fileVersion.FileVersion -ne $properties.FileVersion) { throw "Built file version does not match the project." }
+if ($fileVersion.FileVersion -ne $expectedAssemblyVersion) { throw "Built file version does not match the expected version." }
 Write-Host "Validated extension $($fields.Id) $($fields.Version)"
