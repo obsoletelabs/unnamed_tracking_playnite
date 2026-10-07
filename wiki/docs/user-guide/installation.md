@@ -10,7 +10,7 @@ PEXT does not require the developer tools.
 
 ## Install
 
-1. Download a `.pext` from a reviewed [release](https://github.com/Rosefall-a/UnnamedTrackingPlaynite/releases),
+1. Download a `.pext` from a reviewed [release](https://github.com/obsoletelabs/unnamed_tracking_playnite/releases),
    or obtain a build artifact from the repository's GitHub Actions run. An Actions
    artifact is a ZIP wrapper; extract it to obtain the PEXT.
 2. Open the PEXT with Playnite or drag it into Playnite. Accept the installation

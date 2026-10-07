@@ -1,6 +1,6 @@
 site_name: Unnamed Tracking for Playnite
 site_description: User and developer manual for the Unnamed Tracking companion extension
-repo_url: https://github.com/Rosefall-a/UnnamedTrackingPlaynite
+repo_url: https://github.com/obsoletelabs/unnamed_tracking_playnite
 edit_uri: edit/main/wiki/docs/
 strict: true
 theme:

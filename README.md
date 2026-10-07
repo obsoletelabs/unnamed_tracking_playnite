@@ -4,6 +4,13 @@ A Playnite 10 companion extension for one-way library and save synchronization
 with an Unnamed Tracking account. **0.1.2 is the next, unreleased version.** The
 extension keeps the existing `net462` / PlayniteSDK 6.17.0 generic-plugin model.
 
+The maintained repository is [obsoletelabs/unnamed_tracking_playnite](https://github.com/obsoletelabs/unnamed_tracking_playnite).
+Recovered on 2026-10-07 from commit
+[`154f6d4`](https://github.com/obsoletelabs/unnamed_tracking_playnite/commit/154f6d45e504c9b04f20e08b865278a2b6ebdc8c),
+it retains all 141 available historical commits and 18 original tags. The latest
+recovered tag is `v0.2.0-beta.3`, whose source declares version `0.1.2`; see the
+[recovered version history](wiki/docs/developer-guide/releases.md#recovered-version-history).
+
 - Authenticated full/selected-game sync, GUID matching, metadata and artwork.
 - Preview, per-game progress/cancellation, ignore tags, startup and game-stop sync.
 - Multiple local save folders/files, versioned remote archives, automatic transfers,
@@ -17,7 +24,7 @@ See the [user and developer wiki](wiki/docs/index.md) for the complete guide,
 
 ## Install and configure
 
-Install a reviewed `.pext` from [releases](https://github.com/Rosefall-a/UnnamedTrackingPlaynite/releases)
+Install a reviewed `.pext` from [releases](https://github.com/obsoletelabs/unnamed_tracking_playnite/releases)
 or a GitHub Actions build artifact into Windows Playnite. In **Add-ons → Extension
 settings → Unnamed Tracking**, enter the server base URL and a user API key starting
 with `utk_`. Test the connection, preview, and run the initial upload. API credentials
