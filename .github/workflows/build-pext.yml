@@ -42,6 +42,14 @@ jobs:
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid build version '$version'." }
           "BUILD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-net8-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-net8-
+
       - name: Restore
         run: dotnet restore src/UnnamedTrackingPlaynite/UnnamedTrackingPlaynite.csproj
 
