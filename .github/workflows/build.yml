@@ -19,6 +19,14 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-net8-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-net8-
+
       - name: Restore
         run: dotnet restore UnnamedTrackingPlaynite.sln
 
