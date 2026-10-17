@@ -1,5 +1,17 @@
 # Release notes
 
+## Unreleased
+
+- Report Playnite's state as source observations through the versioned host contract
+  (`/api/playnite/*`): platform, last played, installed state, wishlist ownership and the complete
+  library inventory, keyed by the stable Playnite game ID. The extension never creates or merges
+  identities.
+- Probe the host first; an older host (or another contract version) keeps using the original
+  library routes only, so the extension stays compatible in both directions.
+- Send an inventory only after a whole-library sync whose evidence succeeded; selected-game,
+  game-stopped, cancelled and failed syncs never mark anything removed.
+- Requires host #100 for the new behaviour; against an older host the sync is unchanged. Breaking changes: None.
+
 ## 0.2.0 — 2026-10-07 recovery release
 
 - Restore release-version packaging from the cached 2026-10-03 source and last

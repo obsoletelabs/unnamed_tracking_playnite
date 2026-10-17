@@ -16,6 +16,7 @@ the later changes concern release packaging, build configuration and documentati
 
 - Authenticated full/selected-game sync, GUID matching, metadata and artwork.
 - Preview, per-game progress/cancellation, ignore tags, startup and game-stop sync.
+- Source observations (platform, last played, installed, inventory) through the versioned host contract; falls back to the original routes on an older host.
 - Multiple local save folders/files, versioned remote archives, automatic transfers,
   durable restore backups and rollback on ordinary failure/cancellation.
 - Existing save sidebar with access to the embedded website through normal sign-in.

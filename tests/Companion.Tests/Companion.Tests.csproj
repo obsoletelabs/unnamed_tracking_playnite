@@ -12,6 +12,7 @@
     <PackageReference Include="PlayniteSDK" Version="6.17.0" NoWarn="NU1701" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/ApiConnection.cs" Link="Production/ApiConnection.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/UnnamedTrackingSyncClient.cs" Link="Production/UnnamedTrackingSyncClient.cs" />
+    <Compile Include="../../src/UnnamedTrackingPlaynite/PlayniteObservations.cs" Link="Production/PlayniteObservations.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/UnnamedTrackingUploadResult.cs" Link="Production/UnnamedTrackingUploadResult.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/SaveArchive.cs" Link="Production/SaveArchive.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/SaveSyncConfiguration.cs" Link="Production/SaveSyncConfiguration.cs" />

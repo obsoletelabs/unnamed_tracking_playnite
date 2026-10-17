@@ -105,3 +105,28 @@ Trim and lowercase the Playnite name. Apply these rules in order:
 Never send an arbitrary custom Playnite name or dynamically expand the host enum.
 Startup and manual/selected sync use the same payload mapping; game-stop sync
 updates only linked, nonignored games and does not upload artwork.
+
+## Observation contract v1 (host `/api/playnite/*`)
+
+Host: `obsoletelabs/unnamed_tracking_app_2` issue #100 (documented there in
+`development/playnite-observations.md`). The extension is evidence only: it reports what the
+Playnite library holds, keyed by the stable Playnite game ID, and never creates, merges or splits
+canonical identities. The original library routes above stay in use for create, update, artwork
+and saves, so an older host keeps working.
+
+| Step | Request | Notes |
+| --- | --- | --- |
+| Negotiate | `GET /api/playnite/contract` | After the library lookup of every sync. `supported_versions` must contain `1`. A 404, an unreadable answer or another version leaves the sync on the original routes only (a warning is logged; no data is sent). |
+| Evidence | `POST /api/playnite/observations` | After create/update succeeded, 500 games per request: `contract_version`, then per game `playnite_id`, `name`, `platforms`, `release_date`, `playtime_seconds`, `last_played_at`, `installed`, `favorite`, `status`, `modified_at`, and `owned: false` for a Wishlist entry. Omitted values are unknown to the host. A failing page is a per-game warning (`Operation = Observation`); the next sync reports the same state again and the host treats a replay as unchanged. |
+| Inventory | `POST /api/playnite/inventory` | Only after a whole-library sync (manual or startup) whose evidence all succeeded and that was not cancelled. Lists every Playnite ID, including games carrying the ignore tag. Selected-game and game-stopped syncs never send it, so a partial, failed, cancelled or filtered sync never makes a game look removed. |
+
+Mapping notes: the platform is the first listed platform plus the list; last played is
+`Game.LastActivity` in unix seconds; installed is `Game.IsInstalled`; `modified_at` is `Game.Modified`
+and lets the host ignore a late retry of an older report; playtime is capped at the host maximum.
+Playnite has no ownership or achievement model: ownership is never guessed and achievement counts
+are never sent. The completion status is the same normalized value as the update route.
+
+The host keeps a name or status the user locked in the application; the extension's update still
+succeeds for its other fields (previously a locked, changed title answered 403 for the whole update).
+A 409 (`duplicate_folder_location`, `playnite_game_in_trash`) is still reported per game with the
+server's message.

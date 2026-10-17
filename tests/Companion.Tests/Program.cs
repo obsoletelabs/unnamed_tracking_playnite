@@ -40,6 +40,7 @@ internal static class Program
         ConfigurationAndPaths();
         SaveRestore();
         await LibraryHttp();
+        await ObservationsHttp();
         await SaveHttp();
         Console.WriteLine("Passed " + assertions + " assertions against production synchronization/save helpers.");
     }
@@ -291,12 +292,102 @@ internal static class Program
         using (var server = new Server(request => request.Url!.Query.Contains("skip=0") ? "[" + string.Join(",", Enumerable.Range(0, 200).Select(i => Remote(Guid.NewGuid(), Guid.NewGuid(), "folder-" + i))) + "]" : request.HttpMethod == "GET" ? "[" + Remote(remote, guid) + "]" : "{}"))
         {
             var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { Snapshot(guid) });
-            Check(result.SucceededGames == 1 && server.Requests.Count(request => request.Method == "GET") == 2, "Library pagination");
+            Check(result.SucceededGames == 1 && server.Requests.Where(request => request.Method == "GET" && request.Path.StartsWith("/api/game/list?", StringComparison.Ordinal)).Select(request => request.Path).SequenceEqual(new[] { "/api/game/list?skip=0&limit=200", "/api/game/list?skip=200&limit=200" }), "Library pagination");
+            Check(server.Requests.Count(request => request.Path == PlayniteContract.ContractPath) == 1, "Contract negotiation is separate from library pagination");
             Check(server.Requests.All(request => request.Method != "POST"), "Second-page GUID prevents duplicate");
         }
         var repeated = "[" + string.Join(",", Enumerable.Range(0, 200).Select(i => Remote(Guid.NewGuid(), Guid.NewGuid(), "folder-" + i))) + "]";
         using (var server = new Server(request => repeated))
             await ThrowsAsync<InvalidDataException>(() => client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { Snapshot(guid) }));
+    }
+
+    private static SyncGameSnapshot WithEvidence(Guid id, bool ignored = false)
+    {
+        var snapshot = Snapshot(id, ignored);
+        snapshot.Evidence = PlayniteEvidenceGame.Create(id, " Hades ", new string?[] { "PC (Windows)", " ", "pc (windows)", "Nintendo Switch", null },
+            new DateTime(2020, 9, 17), 36000UL, new DateTime(2025, 10, 1, 12, 0, 0, DateTimeKind.Utc), true, true, "PLAYING", new DateTime(2025, 10, 2, 0, 0, 0, DateTimeKind.Utc));
+        return snapshot;
+    }
+
+    private static async Task ObservationsHttp()
+    {
+        var client = new UnnamedTrackingSyncClient(Log, null!);
+        var guid = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        var remote = Guid.NewGuid();
+
+        // Evidence mapping: partial inventories, platforms, last played, installed, wishlist ownership.
+        var evidence = WithEvidence(guid).Evidence!;
+        Check(evidence.Name == "Hades" && evidence.Platforms!.SequenceEqual(new[] { "PC (Windows)", "Nintendo Switch" }), "Evidence names and distinct platforms");
+        Check(evidence.ReleaseDate == "2020-09-17" && evidence.PlaytimeSeconds == 36000 && evidence.Installed && evidence.Favorite && evidence.Status == "PLAYING", "Evidence scalar fields");
+        Check(evidence.LastPlayedAt == new DateTimeOffset(new DateTime(2025, 10, 1, 12, 0, 0, DateTimeKind.Utc)).ToUnixTimeSeconds(), "Last played as unix seconds");
+        Check(evidence.Owned == null, "Ownership is not guessed");
+        var wish = PlayniteEvidenceGame.Create(guid, "", new string?[0], null, ulong.MaxValue, null, false, false, "WISHLIST", null);
+        Check(wish.Owned == false && wish.Name == null && wish.Platforms == null && wish.LastPlayedAt == null && wish.PlaytimeSeconds == PlayniteContract.MaxPlaytimeSeconds, "Wishlist is not owned; blanks are unknown; playtime is clamped");
+        Check(PlayniteContract.Supports(new PlayniteContractInfo { SupportedVersions = new List<int> { 1, 2 } }) && !PlayniteContract.Supports(new PlayniteContractInfo { SupportedVersions = new List<int> { 2 } }) && !PlayniteContract.Supports(null), "Version negotiation");
+
+        string Host(HttpListenerRequest request)
+        {
+            var path = request.Url!.AbsolutePath;
+            if (path == PlayniteContract.ContractPath) return "{\"supported_versions\":[1],\"current_version\":1}";
+            if (path == "/api/game/list") return "[]";
+            if (path == "/api/game/create") return $"{{\"id\":\"{remote}\"}}";
+            return "{}";
+        }
+
+        // import: legacy create first, then evidence, then (full library only) the inventory
+        using (var server = new Server(request => Host(request)))
+        {
+            var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { WithEvidence(guid), WithEvidence(other, true) }, CancellationToken.None, null, true);
+            Check(result.SucceededGames == 1 && result.FailedGames == 0 && result.WarningCount == 0, "Evidence host sync succeeds");
+            var paths = server.Requests.Where(request => request.Method == "POST").Select(request => request.Path).ToList();
+            Check(paths.SequenceEqual(new[] { "/api/game/create", PlayniteContract.ObservationsPath, PlayniteContract.InventoryPath }), "Create, then evidence, then inventory");
+            var observed = server.Requests.Single(request => request.Path == PlayniteContract.ObservationsPath);
+            Check(observed.Body.Contains(guid.ToString()) && !observed.Body.Contains(other.ToString()), "Ignored games are not reported as evidence");
+            Check(observed.Body.Contains("\"contract_version\":1") && observed.Body.Contains("\"playtime_seconds\":36000") && observed.Body.Contains("\"last_played_at\"") && observed.Body.Contains("\"installed\":true"), "Evidence payload shape");
+            var inventory = server.Requests.Single(request => request.Path == PlayniteContract.InventoryPath);
+            Check(inventory.Body.Contains(guid.ToString()) && inventory.Body.Contains(other.ToString()), "Inventory lists every Playnite game, including ignored ones");
+            Check(server.Requests.All(request => request.Authorization == "Bearer utk_test") && !Log.Messages.Any(message => message.Contains("utk_test")), "Evidence uses header authentication and never logs the key");
+        }
+        // a partial sync (selected game, game-stop style) never asserts an inventory
+        using (var server = new Server(request => Host(request)))
+        {
+            var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { WithEvidence(guid) });
+            Check(result.SucceededGames == 1, "Partial sync succeeds");
+            Check(server.Requests.Any(request => request.Path == PlayniteContract.ObservationsPath) && !server.Requests.Any(request => request.Path == PlayniteContract.InventoryPath), "Partial sync sends no inventory");
+        }
+        // a failed evidence page is a warning, keeps the synced game, and blocks the inventory
+        using (var server = new Server(request => Host(request), 200, false, null, null, request => request.Url!.AbsolutePath == PlayniteContract.ObservationsPath ? 500 : (int?)null))
+        {
+            var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { WithEvidence(guid) }, CancellationToken.None, null, true);
+            Check(result.SucceededGames == 1 && result.FailedGames == 0 && result.WarningCount == 1 && result.Warnings[0].Operation == "Observation" && result.Warnings[0].StatusCode == 500, "Evidence failure is a warning");
+            Check(!server.Requests.Any(request => request.Path == PlayniteContract.InventoryPath), "No inventory after a failed evidence page");
+        }
+        // a failed library lookup writes nothing and sends neither evidence nor inventory
+        using (var server = new Server(request => "error", 500))
+        {
+            var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { WithEvidence(guid) }, CancellationToken.None, null, true);
+            Check(result.FailedGames == 1 && server.Requests.All(request => request.Method == "GET"), "Failed lookup sends no evidence or inventory");
+        }
+        // an older host without the evidence API keeps working through the original routes only
+        using (var server = new Server(request => request.Url!.AbsolutePath == PlayniteContract.ContractPath ? "{}" : Host(request), 200, false, null, null, request => request.Url!.AbsolutePath == PlayniteContract.ContractPath ? 404 : (int?)null))
+        {
+            var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { WithEvidence(guid) }, CancellationToken.None, null, true);
+            Check(result.SucceededGames == 1 && result.WarningCount == 0, "Older host still syncs");
+            Check(!server.Requests.Any(request => request.Path.StartsWith("/api/playnite/", StringComparison.Ordinal) && request.Method == "POST"), "Older host never receives evidence");
+        }
+        // a host that only speaks another contract version is not sent version 1 data
+        using (var server = new Server(request => request.Url!.AbsolutePath == PlayniteContract.ContractPath ? "{\"supported_versions\":[2],\"current_version\":2}" : Host(request)))
+        {
+            var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { WithEvidence(guid) }, CancellationToken.None, null, true);
+            Check(result.SucceededGames == 1 && !server.Requests.Any(request => request.Path == PlayniteContract.ObservationsPath), "Unsupported contract version sends no evidence");
+        }
+        // game-stop: the linked game is updated by Playnite ID and its evidence reported
+        using (var server = new Server(request => request.Url!.AbsolutePath == "/api/game/list" ? "[" + Remote(remote, guid) + "]" : Host(request)))
+        {
+            Check(await client.UpdateSnapshotAsync(server.Url, "utk_test", WithEvidence(guid)), "Game-stop updates the linked game");
+            Check(server.Requests.Any(request => request.Method == "PATCH") && server.Requests.Count(request => request.Path == PlayniteContract.ObservationsPath) == 1, "Game-stop reports its evidence once");
+        }
     }
 
     private static async Task SaveHttp()
@@ -394,7 +485,7 @@ internal static class Program
         public TaskCompletionSource<bool> Arrived { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<RequestRecord> Requests { get; } = new List<RequestRecord>();
         public string Url { get; }
-        public Server(Func<HttpListenerRequest, string> response, int status = 200, bool delay = false, int? artworkStatus = null, Func<HttpListenerRequest, byte[]>? binaryResponse = null)
+        public Server(Func<HttpListenerRequest, string> response, int status = 200, bool delay = false, int? artworkStatus = null, Func<HttpListenerRequest, byte[]>? binaryResponse = null, Func<HttpListenerRequest, int?>? statusFor = null)
         {
             var port = new TcpListener(IPAddress.Loopback, 0); port.Start();
             var number = ((IPEndPoint)port.LocalEndpoint).Port; port.Stop();
@@ -413,7 +504,7 @@ internal static class Program
                         if (delay) await release.Task;
                         if (!listener.IsListening) break;
                         var bytes = binaryResponse != null && context.Request.Url!.AbsolutePath.EndsWith("/download", StringComparison.Ordinal) ? binaryResponse(context.Request) : Encoding.UTF8.GetBytes(response(context.Request));
-                        context.Response.StatusCode = artworkStatus.HasValue && context.Request.Url!.AbsolutePath.Contains("/assets/") ? artworkStatus.Value : status;
+                        context.Response.StatusCode = statusFor?.Invoke(context.Request) ?? (artworkStatus.HasValue && context.Request.Url!.AbsolutePath.Contains("/assets/") ? artworkStatus.Value : status);
                         context.Response.ContentType = "application/json";
                         if (status == 302) context.Response.RedirectLocation = "http://127.0.0.1:1/credential-target";
                         context.Response.ContentLength64 = bytes.Length;
