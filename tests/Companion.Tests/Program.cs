@@ -292,7 +292,8 @@ internal static class Program
         using (var server = new Server(request => request.Url!.Query.Contains("skip=0") ? "[" + string.Join(",", Enumerable.Range(0, 200).Select(i => Remote(Guid.NewGuid(), Guid.NewGuid(), "folder-" + i))) + "]" : request.HttpMethod == "GET" ? "[" + Remote(remote, guid) + "]" : "{}"))
         {
             var result = await client.UploadSnapshotsAsync(server.Url, "utk_test", new[] { Snapshot(guid) });
-            Check(result.SucceededGames == 1 && server.Requests.Count(request => request.Method == "GET") == 2, "Library pagination");
+            Check(result.SucceededGames == 1 && server.Requests.Where(request => request.Method == "GET" && request.Path.StartsWith("/api/game/list?", StringComparison.Ordinal)).Select(request => request.Path).SequenceEqual(new[] { "/api/game/list?skip=0&limit=200", "/api/game/list?skip=200&limit=200" }), "Library pagination");
+            Check(server.Requests.Count(request => request.Path == PlayniteContract.ContractPath) == 1, "Contract negotiation is separate from library pagination");
             Check(server.Requests.All(request => request.Method != "POST"), "Second-page GUID prevents duplicate");
         }
         var repeated = "[" + string.Join(",", Enumerable.Range(0, 200).Select(i => Remote(Guid.NewGuid(), Guid.NewGuid(), "folder-" + i))) + "]";
