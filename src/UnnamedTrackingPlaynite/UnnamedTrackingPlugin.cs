@@ -111,15 +111,15 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
     }
 
     public Task<UnnamedTrackingUploadResult> UploadLibraryAsync(Action<int, int, string>? progress = null)
-        => UploadGamesAsync(PlayniteApi.Database.Games.ToList(), progress);
+        => UploadGamesAsync(PlayniteApi.Database.Games.ToList(), progress, true);
 
-    private async Task<UnnamedTrackingUploadResult> UploadGamesAsync(IEnumerable<Game> games, Action<int, int, string>? progress = null)
+    private async Task<UnnamedTrackingUploadResult> UploadGamesAsync(IEnumerable<Game> games, Action<int, int, string>? progress = null, bool completeLibrary = false)
     {
         var cancellation = BeginSync();
         try
         {
             return await _syncClient.UploadLibraryAsync(Settings.ApiUrl, Settings.AuthValue, games,
-                Settings.IgnoreTag, cancellation.Token, progress).ConfigureAwait(true);
+                Settings.IgnoreTag, cancellation.Token, progress, completeLibrary).ConfigureAwait(true);
         }
         finally { syncCancellation = null; cancellation.Dispose(); }
     }

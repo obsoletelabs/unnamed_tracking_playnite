@@ -53,3 +53,15 @@ The open AFK PR #6 has no direct dependency on this work and is left untouched.
 No Playnite SDK model, host contract, runtime dependency, or second synchronization
 architecture is introduced. Version 0.1.2 remains unreleased. See
 [release gates](releases.md).
+
+## 2026-10 host contract audit (identity overhaul, host #100)
+
+Re-audited against application `unnamed_tracking_app_2` with the extension source. Findings:
+
+| Behaviour | Result |
+| --- | --- |
+| Save sync, game-stopped sync | Unchanged. Game-stop updates a linked, non-ignored game by Playnite ID and now also reports its evidence; it never creates and never sends an inventory. Save routes are the documented archive routes. |
+| 403 | A user-locked, changed title answered 403 and failed the whole update (playtime too). The host now keeps the locked name and applies the rest. 401 (invalid or revoked key) and artwork 403 stay per-game errors. |
+| 409 | `duplicate_folder_location` and `playnite_game_in_trash` are per-game failures with the response body; nothing is retried automatically. |
+| Hidden state | The extension sent no last played, platform field or installed state; they now travel in the observation contract (see [API contract](api-contract.md)). |
+| Partial runs | Cancellation, a failed lookup, selected-game and game-stopped syncs never produce an inventory. |
