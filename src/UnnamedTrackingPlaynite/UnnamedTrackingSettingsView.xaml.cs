@@ -32,6 +32,12 @@ public partial class UnnamedTrackingSettingsView : UserControl
         if (settings != null && !signedIn && !string.IsNullOrEmpty(settings.AuthValue)) ApiKeyExpander.IsExpanded = true;
     }
 
+    private void ShowSignInStatus(string text)
+    {
+        SignInStatus.Text = text;
+        SignInStatus.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private void ServerUrlBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshAccount();
 
     private async void SignInButton_Click(object sender, RoutedEventArgs e)
@@ -42,10 +48,10 @@ public partial class UnnamedTrackingSettingsView : UserControl
         ConnectionStatus.Text = string.Empty;
         try
         {
-            await settings.SignInAsync(text => SignInStatus.Text = text, signIn.Token);
+            await settings.SignInAsync(ShowSignInStatus, signIn.Token);
         }
-        catch (OperationCanceledException) { SignInStatus.Text = "Sign-in cancelled."; }
-        catch (Exception ex) { SignInStatus.Text = "Sign-in failed: " + ex.Message; }
+        catch (OperationCanceledException) { ShowSignInStatus("Sign-in cancelled."); }
+        catch (Exception ex) { ShowSignInStatus("Sign-in failed: " + ex.Message); }
         finally
         {
             signIn.Dispose();
@@ -63,13 +69,13 @@ public partial class UnnamedTrackingSettingsView : UserControl
         try
         {
             await settings.SignOutAsync(CancellationToken.None);
-            SignInStatus.Text = "Signed out. Playnite's access was revoked on the server.";
+            ShowSignInStatus("Signed out. Playnite's access was revoked on the server.");
         }
         catch (Exception ex)
         {
             // Signed out locally either way; the grant can still be revoked in Connected apps.
-            SignInStatus.Text = "Signed out here, but the server could not be reached to revoke access: " + ex.Message +
-                                " Revoke it under Connected apps if needed.";
+            ShowSignInStatus("Signed out here, but the server could not be reached to revoke access: " + ex.Message +
+                             " Revoke it under Connected apps if needed.");
         }
         finally
         {

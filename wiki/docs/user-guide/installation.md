@@ -54,6 +54,10 @@ stops waiting; an unanswered request expires after ten minutes.
 
 ![The Connect Playnite consent page](../assets/sign-in-consent.jpg)
 
+| Before signing in | After signing in |
+| --- | --- |
+| ![Settings before signing in](../assets/settings-signed-out.png) | ![Settings after signing in](../assets/settings-signed-in.png) |
+
 The extension never sees your password. It receives a revocable credential
 (`utd_...`) that only works for the capabilities you approved, and never for
 administration, API keys or other accounts. The credential is encrypted with Windows
@@ -83,6 +87,21 @@ browser sign-in takes precedence over a stored key.
 Leave automatic synchronization disabled until the connection and initial preview
 look correct. The default ignore tag is `trackingapp_ignore`. See
 [ignored games](synchronization.md#ignored-games) before changing it.
+
+## Links that open Playnite
+
+The extension handles `playnite://unnamedtracking/...` links, so a shortcut or the
+web app can hand off to Playnite:
+
+| Link | What it does |
+| --- | --- |
+| `playnite://unnamedtracking/settings` | Opens these settings |
+| `playnite://unnamedtracking/sign-in` | Starts browser sign-in for the server already entered here; if none is entered or you are signed in, opens the settings |
+| `playnite://unnamedtracking/sync` | Syncs the whole library now |
+
+A link never changes the server: signing in through a link only uses the server URL
+saved in these settings. The **Extensions** menu also has *Sign in to Unnamed
+Tracking...* (or *Unnamed Tracking settings...* once signed in).
 
 ## Test the connection
 

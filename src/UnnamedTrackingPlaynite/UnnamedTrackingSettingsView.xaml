@@ -13,7 +13,7 @@
                 <Button x:Name="SignOutButton" Content="Sign out" Padding="12,4" Margin="0,0,8,0" Click="SignOutButton_Click" />
                 <Button x:Name="TestButton" Content="Test connection" Padding="12,4" Click="TestButton_Click" />
             </StackPanel>
-            <TextBox x:Name="SignInStatus" Margin="0,8,0,0" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" Opacity="0.85" />
+            <TextBox x:Name="SignInStatus" Margin="0,8,0,0" Visibility="Collapsed" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" Opacity="0.85" />
             <TextBlock x:Name="ConnectionStatus" Margin="0,4,0,0" TextWrapping="Wrap" />
             <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Opacity="0.7"
                        Text="Signing in opens Unnamed Tracking in your browser, where you choose what Playnite may do. Playnite never sees your password. You can revoke it any time under Connected apps." />

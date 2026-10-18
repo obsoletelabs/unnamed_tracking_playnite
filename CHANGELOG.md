@@ -12,6 +12,12 @@
 - Send each game's first Playnite platform, so the server can name and group copies
   of one game from different stores and platforms.
 - Reorganise the settings into Account, Automatic synchronization and Library sync.
+- Handle `playnite://unnamedtracking/settings`, `/sign-in` (only for the server
+  already configured) and `/sync` links, and add *Sign in to Unnamed Tracking...* /
+  *Unnamed Tracking settings...* to the Extensions menu.
+- Give the sidebar item an icon (it was an empty coloured square).
+- Verified in a real portable Playnite 10.62: extension load, browser sign-in and the
+  signed-in settings, with the credential stored encrypted.
 - The portable test harness skips the symbolic-link save checks, with a message,
   on Windows accounts that cannot create symbolic links.
 - Requires host `obsoletelabs/unnamed_tracking_app_2#276` for sign-in; older hosts

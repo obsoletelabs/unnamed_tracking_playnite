@@ -180,10 +180,13 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
     public async Task<bool> SignInAsync(Action<string> status, CancellationToken cancellationToken)
     {
         var server = ApiConnection.ValidateBaseUrl(ApiUrl);
-        status("Checking the server…");
+        status("Checking the server...");
         if (!await AccountLink.SupportsSignInAsync(server, cancellationToken).ConfigureAwait(true))
             throw new InvalidOperationException("This server does not offer Playnite sign-in yet. Update the server, or use an API key below.");
         var pending = await AccountLink.StartAsync(server, Environment.MachineName, DeviceId, cancellationToken).ConfigureAwait(true);
+        // The page address is not secret (the verifier never leaves Playnite); log it so
+        // people without a default browser can still finish signing in.
+        LogManager.GetLogger().Info("Opening the Unnamed Tracking sign-in page: " + pending.VerificationUrl);
         OpenInBrowser(pending.VerificationUrl);
         status("Approve the sign-in in your browser. If it did not open, visit: " + pending.VerificationUrl);
         var result = await AccountLink.WaitAsync(server, pending, cancellationToken).ConfigureAwait(true);

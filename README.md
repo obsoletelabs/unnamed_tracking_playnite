@@ -25,7 +25,7 @@ the later changes concern release packaging, build configuration and documentati
 See the [user and developer wiki](wiki/docs/index.md) for the complete guide,
 [verified plugin-manager API contract](wiki/docs/developer-guide/api-contract.md),
 [local versus remote save data](wiki/docs/user-guide/saves.md), and
-[known runtime/screenshot limitations](wiki/docs/user-guide/screenshots.md).
+[screenshots and runtime verification](wiki/docs/user-guide/screenshots.md).
 
 ## Install and configure
 
@@ -76,5 +76,6 @@ Both existing build workflows remain active, including package validation.
 Main/PR builds produce artifacts; release publication requires an intentional tag
 matching the manifest/project version. See [release notes](CHANGELOG.md) and
 [release process](wiki/docs/developer-guide/releases.md).
-Headless tests and builds do not claim full Playnite runtime testing; actual
-Playnite screenshots could not be obtained in the Linux environment.
+Sign-in, settings and extension load were verified in a real portable Playnite 10.62
+on Windows 11; see [screenshots and runtime verification](wiki/docs/user-guide/screenshots.md)
+for what is and is not yet covered inside Playnite.

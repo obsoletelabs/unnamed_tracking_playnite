@@ -43,6 +43,14 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
 
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
+        yield return new MainMenuItem
+        {
+            Description = Settings.IsSignedIn || !string.IsNullOrEmpty(Settings.AuthValue)
+                ? "Unnamed Tracking settings…"
+                : "Sign in to Unnamed Tracking…",
+            MenuSection = "@",
+            Action = args => OpenSettings()
+        };
         yield return new MainMenuItem { Description = "Cancel Unnamed Tracking synchronization", MenuSection = "@", Action = args => CancelSync() };
         yield return new MainMenuItem
         {
@@ -57,6 +65,8 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         yield return new SidebarItem
         {
             Title = "Unnamed Tracking",
+            // A Windows game-controller glyph: the package ships no image files.
+            Icon = new TextBlock { Text = "", FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 20 },
             Type = SiderbarItemType.View,
             Opened = OpenSaveSyncDashboard,
             Closed = () => { }
@@ -244,11 +254,52 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
     public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
     {
         _logger.Info("Unnamed Tracking plugin loaded.");
+        // playnite://unnamedtracking/settings opens these settings and .../sync syncs the
+        // library, so the web app (or a shortcut) can hand off to Playnite.
+        PlayniteApi.UriHandler.RegisterSource(UriSource, HandleUri);
 
         if (Settings.SyncOnStartup && !string.IsNullOrWhiteSpace(Settings.ApiUrl) && !string.IsNullOrWhiteSpace(Settings.Credential))
         {
             _ = SyncStartupAsync();
         }
+    }
+
+    internal const string UriSource = "unnamedtracking";
+
+    private void HandleUri(PlayniteUriEventArgs args)
+    {
+        var command = args.Arguments?.FirstOrDefault()?.Trim().ToLowerInvariant();
+        switch (command)
+        {
+            case "settings":
+                OpenSettings();
+                break;
+            case "sign-in":
+                // Only ever for the server already configured here, so a link cannot
+                // point Playnite at a different server.
+                if (Settings.IsSignedIn || string.IsNullOrWhiteSpace(Settings.ApiUrl)) OpenSettings();
+                else _ = SignInFromLinkAsync();
+                break;
+            case "sync":
+                _ = SyncLibraryAsync(PlayniteApi.Database.Games.ToList());
+                break;
+            default:
+                _logger.Warn($"Ignored unknown Unnamed Tracking link command '{command}'.");
+                break;
+        }
+    }
+
+    private void OpenSettings() => PlayniteApi.MainView.OpenPluginSettings(Id);
+
+    private async Task SignInFromLinkAsync()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(11));
+        try
+        {
+            var connected = await Settings.SignInAsync(status => _logger.Info("Sign-in: " + status), cancellation.Token).ConfigureAwait(true);
+            Notify(connected ? "Unnamed Tracking: " + Settings.AccountSummary : "Unnamed Tracking sign-in did not complete.", !connected);
+        }
+        catch (Exception ex) { Notify("Unnamed Tracking sign-in failed: " + ex.Message, true); }
     }
 
     private async Task SyncStartupAsync()
