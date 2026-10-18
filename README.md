@@ -14,7 +14,8 @@ The last downloaded `0.2.0` package was also recovered. Cached source from its
 `fd114c4` build confirms the C# and XAML files match this recovered baseline;
 the later changes concern release packaging, build configuration and documentation.
 
-- Authenticated full/selected-game sync, GUID matching, metadata and artwork.
+- Browser sign-in through user-approved integration access (no API key needed).
+- Authenticated full/selected-game sync, GUID matching, metadata, platform and artwork.
 - Preview, per-game progress/cancellation, ignore tags, startup and game-stop sync.
 - Source observations (platform, last played, installed, inventory) through the versioned host contract; falls back to the original routes on an older host.
 - Multiple local save folders/files, versioned remote archives, automatic transfers,
@@ -30,9 +31,12 @@ See the [user and developer wiki](wiki/docs/index.md) for the complete guide,
 
 Install a reviewed `.pext` from [releases](https://github.com/obsoletelabs/unnamed_tracking_playnite/releases)
 or a GitHub Actions build artifact into Windows Playnite. In **Add-ons → Extension
-settings → Unnamed Tracking**, enter the server base URL and a user API key starting
-with `utk_`. Test the connection, preview, and run the initial upload. API credentials
-stay in headers; Playnite's stored extension settings remain sensitive local data.
+settings → Unnamed Tracking**, enter the server base URL and click **Sign in with your
+browser**: approve Playnite's access on the page that opens, and the extension finishes
+signing in by itself. No password or API key passes through Playnite; the revocable
+credential is DPAPI-encrypted and listed under **Connected apps** on the server. Older
+servers can still use a `utk_` user API key. Test the connection, preview, and run the
+initial sync. See [installation and sign-in](wiki/docs/user-guide/installation.md).
 
 Sync matches unique Playnite GUIDs first, preserves remote folders on rename, and
 never sends arbitrary custom status names to the host enum. Library sync overwrites

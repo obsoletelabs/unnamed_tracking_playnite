@@ -20,11 +20,13 @@ internal static class ApiConnection
         return uri.AbsoluteUri.TrimEnd('/');
     }
 
+    // A browser sign-in credential (utd_, see AccountLink) or a legacy user API key (utk_).
     internal static void ValidateKey(string key)
     {
-        if (string.IsNullOrWhiteSpace(key) || !key.StartsWith("utk_", StringComparison.Ordinal) || key.Length <= 4 ||
+        var known = key != null && (key.StartsWith("utd_", StringComparison.Ordinal) || key.StartsWith("utk_", StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(key) || !known || key!.Length <= 4 ||
             System.Linq.Enumerable.Any(key, char.IsWhiteSpace))
-            throw new InvalidOperationException("Use an Unnamed Tracking user API key beginning with utk_. Plugin-management tokens cannot synchronize games.");
+            throw new InvalidOperationException("Sign in to Unnamed Tracking first (or use a user API key beginning with utk_). Plugin-management tokens cannot synchronize games.");
     }
 
     internal static string DownloadUrl(string baseUrl, string path, Guid gameId, Guid archiveId, Guid versionId)

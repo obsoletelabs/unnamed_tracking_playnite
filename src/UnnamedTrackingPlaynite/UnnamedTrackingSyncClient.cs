@@ -29,6 +29,9 @@ internal sealed class UnnamedTrackingSyncGamePayload
     [DataMember(Name = "collections")] public List<string> Collections { get; set; } = new List<string>();
     [DataMember(Name = "links")] public List<UnnamedTrackingSyncLink> Links { get; set; } = new List<UnnamedTrackingSyncLink>();
     [DataMember(Name = "source")] public string Source { get; set; } = string.Empty;
+    // The first Playnite platform, so copies of one game from different stores and
+    // platforms can be told apart on the server. Omitted when Playnite has none.
+    [DataMember(Name = "platform", EmitDefaultValue = false)] public string? Platform { get; set; }
     [DataMember(Name = "age_rating")] public string? AgeRating { get; set; }
     [DataMember(Name = "favorite")] public bool Favorite { get; set; }
     [DataMember(Name = "notes")] public string Notes { get; set; } = string.Empty;
@@ -560,6 +563,12 @@ internal sealed class UnnamedTrackingSyncClient
         ResponseBody = ex.ResponseBody
     };
 
+    internal static string? FirstPlatform(Game game)
+    {
+        var name = OrEmpty(game.Platforms).Where(x => x != null).Select(x => x.Name?.Trim()).FirstOrDefault(x => !string.IsNullOrEmpty(x));
+        return name == null ? null : name.Length > 50 ? name.Substring(0, 50) : name;
+    }
+
     private static string Serialize<T>(T value)
     {
         var serializer = new DataContractJsonSerializer(typeof(T));
@@ -677,6 +686,7 @@ internal sealed class UnnamedTrackingSyncClient
             Collections = OrEmpty(game.Categories).Where(x => x != null).Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             Links = OrEmpty(game.Links).Where(x => x != null && !string.IsNullOrWhiteSpace(x.Url)).Select(x => new UnnamedTrackingSyncLink { Label = string.IsNullOrWhiteSpace(x.Name) ? "Playnite link" : x.Name, Url = x.Url }).ToList(),
             Source = game.Source?.Name ?? string.Empty,
+            Platform = FirstPlatform(game),
             AgeRating = JoinNames(game.AgeRatings),
             Favorite = game.Favorite,
             Notes = game.Notes ?? string.Empty,

@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,9 +9,73 @@ namespace UnnamedTrackingPlaynite;
 
 public partial class UnnamedTrackingSettingsView : UserControl
 {
+    private CancellationTokenSource? signIn;
+
     public UnnamedTrackingSettingsView()
     {
         InitializeComponent();
+        Loaded += (_, _) => RefreshAccount();
+        DataContextChanged += (_, _) => RefreshAccount();
+    }
+
+    // Which account buttons apply: sign in when signed out, sign out when signed in,
+    // cancel while waiting for the browser. The API key stays available for older servers.
+    private void RefreshAccount()
+    {
+        var settings = DataContext as UnnamedTrackingSettings;
+        var waiting = signIn != null;
+        var signedIn = settings?.IsSignedIn == true;
+        SignInButton.Visibility = !signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
+        CancelSignInButton.Visibility = waiting ? Visibility.Visible : Visibility.Collapsed;
+        SignOutButton.Visibility = signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
+        SignInButton.IsEnabled = !string.IsNullOrWhiteSpace(settings?.ApiUrl);
+        if (settings != null && !signedIn && !string.IsNullOrEmpty(settings.AuthValue)) ApiKeyExpander.IsExpanded = true;
+    }
+
+    private void ServerUrlBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshAccount();
+
+    private async void SignInButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!(DataContext is UnnamedTrackingSettings settings)) return;
+        signIn = new CancellationTokenSource(TimeSpan.FromMinutes(11));
+        RefreshAccount();
+        ConnectionStatus.Text = string.Empty;
+        try
+        {
+            await settings.SignInAsync(text => SignInStatus.Text = text, signIn.Token);
+        }
+        catch (OperationCanceledException) { SignInStatus.Text = "Sign-in cancelled."; }
+        catch (Exception ex) { SignInStatus.Text = "Sign-in failed: " + ex.Message; }
+        finally
+        {
+            signIn.Dispose();
+            signIn = null;
+            RefreshAccount();
+        }
+    }
+
+    private void CancelSignInButton_Click(object sender, RoutedEventArgs e) => signIn?.Cancel();
+
+    private async void SignOutButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!(DataContext is UnnamedTrackingSettings settings)) return;
+        SignOutButton.IsEnabled = false;
+        try
+        {
+            await settings.SignOutAsync(CancellationToken.None);
+            SignInStatus.Text = "Signed out. Playnite's access was revoked on the server.";
+        }
+        catch (Exception ex)
+        {
+            // Signed out locally either way; the grant can still be revoked in Connected apps.
+            SignInStatus.Text = "Signed out here, but the server could not be reached to revoke access: " + ex.Message +
+                                " Revoke it under Connected apps if needed.";
+        }
+        finally
+        {
+            SignOutButton.IsEnabled = true;
+            RefreshAccount();
+        }
     }
 
     private void ApiKeyBox_Loaded(object sender, RoutedEventArgs e)

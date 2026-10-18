@@ -15,24 +15,61 @@ Authoritative sources are
 [status enum](https://github.com/Rosefall-a/unnamed_tracking_app/blob/45424fe6846587e2c25cbdafa882c621d2dbcd04/src/backend/src/database/models/game.py), and
 [authentication](https://github.com/Rosefall-a/unnamed_tracking_app/blob/45424fe6846587e2c25cbdafa882c621d2dbcd04/src/backend/src/core/auth.py).
 
-Requests use `Authorization: Bearer utk_<secret>`. The plugin-manager branch
-explicitly rejects `utpm_` management tokens on application APIs. The extension
-uses the user API directly and is not a Plugin API v1 gateway consumer.
+Requests use `Authorization: Bearer <credential>`: a `utd_` credential from
+browser sign-in, or a legacy `utk_` user API key on older servers. `utpm_`
+management tokens are rejected on application APIs. The extension uses the user API
+directly and is not a Plugin API v1 gateway consumer.
+
+## Sign-in (user-approved integration access)
+
+Implemented in `AccountLink.cs` against the host's
+[user-approved integration access](https://github.com/obsoletelabs/unnamed_tracking_app_2/blob/main/wiki/docs/integrations/user-delegation.md)
+protocol v1.0, the same one the Discord Activity uses. All paths are under
+`/api/delegation/v1`.
+
+1. `GET /instance`: sign-in is offered when `desktop_apps` contains `playnite`. A
+   404 (older host) or a missing entry (owner switched it off) keeps the API-key
+   fallback.
+2. `POST /desktop/playnite/requests` with `scopes` (`profile.read`,
+   `library.sync`, `saves.read`, `saves.write`), `code_challenge` (lower-case hex
+   SHA-256 of a random 64-character URL-safe verifier), `device_name` (the Windows
+   machine name, at most 100 characters) and `device_id` (a random ID stored with the
+   settings). The response carries `request_id`, `verification_path`, `expires_at`
+   (ten minutes) and `poll_interval_seconds`.
+3. The browser opens `<server><verification_path>`; the user approves a subset.
+4. `POST /requests/{request_id}/exchange` with `{"verifier": "..."}` at the returned
+   interval (clamped to 2-30 s) answers `pending`, `denied`, or `connected` with a
+   one-time `access_token` (`utd_...`). A 404 means the request expired. The verifier
+   is only ever sent in this body, never in a URL.
+5. `GET /profile` (needs `profile.read`) gives the display name for *Connected as*.
+6. Sign out is `DELETE /credential`, which revokes the presenting grant; a 401
+   (already revoked) is treated as signed out.
+
+The credential is protected with DPAPI (`CredentialProtection.cs`, current Windows
+user, extension-specific entropy) and bound to the normalized server URL it was
+issued for. Each endpoint below accepts it only with the scope in the *Scope*
+column; every other application route refuses it.
 
 ## Endpoints
 
-| Operation | Request | Response expected |
-| --- | --- | --- |
-| List / lookup / preview | `GET /api/game/list?skip=N&limit=200` | JSON array of games with valid UUID `id`, `folder_location`, optional UUID `playnite_guid` |
-| Connection test | Same list endpoint with `skip=0&limit=1` | Valid JSON game array; empty is allowed |
-| Create | `POST /api/game/create` | Game object with non-empty UUID `id` |
-| Update / parent relationship | `PATCH /api/game/update/{id}` | Successful HTTP response |
-| Artwork | `POST /api/game/{id}/assets/key_art` or `/banner` | Multipart `file`, successful HTTP response |
-| List saves | `GET /api/game/{id}/archives/save` | JSON array of named archives with UUIDs and version arrays |
-| Create save archive | `POST /api/game/{id}/archives/save` | Multipart `name` and `file`; archive object with UUID `id` |
-| Rename legacy archive | `PATCH /api/game/{id}/archives/{archive_id}` | JSON `name`; successful HTTP response |
-| Upload save version | `POST /api/game/{id}/archives/{archive_id}/versions` | Multipart `file`, successful HTTP response |
-| Download version | `GET /api/game/{id}/archives/{archive_id}/versions/{version_id}/download` | ZIP bytes |
+| Operation | Request | Scope | Response expected |
+| --- | --- | --- | --- |
+| List / lookup / preview | `GET /api/game/list?skip=N&limit=200` | `library.sync` | JSON array of games with valid UUID `id`, `folder_location`, optional UUID `playnite_guid` |
+| Connection test | Same list endpoint with `skip=0&limit=1` | `library.sync` | Valid JSON game array; empty is allowed |
+| Create | `POST /api/game/create` | `library.sync` | Game object with non-empty UUID `id` |
+| Update / parent relationship | `PATCH /api/game/update/{id}` | `library.sync` | Successful HTTP response |
+| Artwork | `POST /api/game/{id}/assets/key_art` or `/banner` | `library.sync` | Multipart `file`, successful HTTP response |
+| Evidence | `GET /api/playnite/contract`, `POST /api/playnite/observations`, `POST /api/playnite/inventory` | `library.sync` | Versioned evidence contract |
+| List saves | `GET /api/game/{id}/archives/save` | `saves.read` | JSON array of named archives with UUIDs and version arrays |
+| Create save archive | `POST /api/game/{id}/archives/save` | `saves.write` | Multipart `name` and `file`; archive object with UUID `id` |
+| Rename legacy archive | `PATCH /api/game/{id}/archives/{archive_id}` | `saves.write` | JSON `name`; successful HTTP response |
+| Upload save version | `POST /api/game/{id}/archives/{archive_id}/versions` | `saves.write` | Multipart `file`, successful HTTP response |
+| Download version | `GET /api/game/{id}/archives/{archive_id}/versions/{version_id}/download` | `saves.read` | ZIP bytes |
+
+The game payload includes `platform`, the first Playnite platform name (at most 50
+characters, omitted when there is none), so the server can name and group copies of
+one game from different stores and platforms. Archive list responses also carry the
+owning `game_id`; the extension keeps using the game that matches its Playnite GUID.
 
 Only HTTP 2xx is success. Redirects are rejected. No write retry is automatic:
 an interrupted request may already have committed remotely. Re-list on the next
