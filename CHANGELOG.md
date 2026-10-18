@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **Sign in with your browser instead of pasting an API key.** The extension uses
+  the server's user-approved integration access (the same consent flow as the
+  Discord Activity): the user approves exactly what Playnite may do, and the
+  extension receives a revocable credential that only reaches library sync, saves
+  and the display name. It is encrypted with Windows DPAPI and bound to its server.
+  **Sign out** revokes it on the server; Connected apps lists this computer.
+  `utk_` API keys keep working against servers without Playnite sign-in.
+- Send each game's first Playnite platform, so the server can name and group copies
+  of one game from different stores and platforms.
+- Reorganise the settings into Account, Automatic synchronization and Library sync.
+- Handle `playnite://unnamedtracking/settings`, `/sign-in` (only for the server
+  already configured) and `/sync` links, and add *Sign in to Unnamed Tracking...* /
+  *Unnamed Tracking settings...* to the Extensions menu.
+- Give the sidebar item an icon (it was an empty coloured square).
+- Verified in a real portable Playnite 10.62: extension load, browser sign-in and the
+  signed-in settings, with the credential stored encrypted.
+- The portable test harness skips the symbolic-link save checks, with a message,
+  on Windows accounts that cannot create symbolic links.
+- Requires host `obsoletelabs/unnamed_tracking_app_2#276` for sign-in; older hosts
+  keep the API-key path. Breaking changes: None.
 - Report Playnite's state as source observations through the versioned host contract
   (`/api/playnite/*`): platform, last played, installed state, wishlist ownership and the complete
   library inventory, keyed by the stable Playnite game ID. The extension never creates or merges

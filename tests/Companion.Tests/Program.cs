@@ -42,6 +42,7 @@ internal static class Program
         await LibraryHttp();
         await ObservationsHttp();
         await SaveHttp();
+        await SignInHttp();
         Console.WriteLine("Passed " + assertions + " assertions against production synchronization/save helpers.");
     }
 
@@ -177,7 +178,13 @@ internal static class Program
         Check(File.ReadAllText(missingFile) == "restored", "Persisted file target restores when absent");
 #if NET8_0
         var link = Path.Combine(temp.Path, "symlink");
-        Directory.CreateSymbolicLink(link, root);
+        try { Directory.CreateSymbolicLink(link, root); }
+        catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+        {
+            // Windows only lets administrators or Developer Mode create symbolic links.
+            Console.WriteLine("Skipped symbolic-link save checks: " + ex.Message.Trim());
+            return;
+        }
         Throws<InvalidDataException>(() => SaveArchive.ValidatePaths(new[] { new SavePathEntry { Name = "Link", Path = link } }));
         var nestedLink = Path.Combine(root, "linked-subfolder");
         Directory.CreateSymbolicLink(nestedLink, temp.Path);
@@ -465,6 +472,67 @@ internal static class Program
             Check(await Task.WhenAny(task, Task.Delay(5000)) == task, "Shutdown cancels in-flight save request");
             await ThrowsAsync<OperationCanceledException>(() => task);
         }
+    }
+
+    private static async Task SignInHttp()
+    {
+        var exchanges = 0;
+        var delays = new List<TimeSpan>();
+        Task Delay(TimeSpan wait, CancellationToken token) { delays.Add(wait); return Task.CompletedTask; }
+        var future = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds();
+        using (var server = new Server(request =>
+        {
+            var path = request.Url!.AbsolutePath;
+            if (path.EndsWith("/instance", StringComparison.Ordinal)) return "{\"desktop_apps\":[\"playnite\"],\"clients\":[]}";
+            if (path.EndsWith("/desktop/playnite/requests", StringComparison.Ordinal))
+                return $"{{\"request_id\":\"r1\",\"verification_path\":\"/integration-access/r1\",\"expires_at\":{future},\"poll_interval_seconds\":5}}";
+            if (path.EndsWith("/requests/r1/exchange", StringComparison.Ordinal))
+                return ++exchanges < 2 ? "{\"state\":\"pending\"}" : "{\"state\":\"connected\",\"access_token\":\"utd_abc\",\"scopes\":[\"library.sync\"],\"expires_at\":null}";
+            if (path.EndsWith("/profile", StringComparison.Ordinal)) return "{\"id\":\"u\",\"display_name\":\"Sam\"}";
+            return "{}";
+        }))
+        {
+            Check(await AccountLink.SupportsSignInAsync(server.Url, CancellationToken.None), "Desktop sign-in detected");
+            var pending = await AccountLink.StartAsync(server.Url, "Gaming PC", "playnite-device", CancellationToken.None);
+            Check(pending.VerificationUrl == server.Url + "/integration-access/r1", "Browser opens the consent page on the configured server");
+            var started = server.Requests.Single(r => r.Path.EndsWith("/requests", StringComparison.Ordinal));
+            Check(started.Body.Contains("\"code_challenge\":\"" + AccountLink.Challenge(pending.Verifier) + "\""), "Challenge is the verifier's SHA-256");
+            Check(started.Body.Contains("\"device_name\":\"Gaming PC\"") && started.Body.Contains("library.sync") && started.Body.Contains("saves.write"), "Requests sync and save access for this device");
+            Check(!started.Body.Contains(pending.Verifier) && string.IsNullOrEmpty(started.Authorization), "The verifier and no credential leave Playnite at start");
+            var result = await AccountLink.WaitAsync(server.Url, pending, CancellationToken.None, Delay);
+            Check(result.IsConnected && result.Credential == "utd_abc", "Approval returns the scoped credential");
+            Check(delays.Count == 1 && delays[0] == TimeSpan.FromSeconds(5), "Polls at the server's interval while pending");
+            Check(server.Requests.Where(r => r.Path.Contains("/exchange")).All(r => r.Body.Contains(pending.Verifier) && !r.Path.Contains(pending.Verifier)), "Verifier only ever in the exchange body");
+            Check(await AccountLink.DisplayNameAsync(server.Url, "utd_abc", CancellationToken.None) == "Sam", "Connected as the account's display name");
+            Check(server.Requests.Last().Authorization == "Bearer utd_abc", "Profile uses the new credential");
+            await AccountLink.SignOutAsync(server.Url, "utd_abc", CancellationToken.None);
+            Check(server.Requests.Last().Method == "DELETE" && server.Requests.Last().Path.EndsWith("/credential", StringComparison.Ordinal), "Sign out revokes the grant");
+            ApiConnection.ValidateKey("utd_abc");
+            ApiConnection.ValidateKey("utk_abc");
+            Throws<InvalidOperationException>(() => ApiConnection.ValidateKey("utpm_abc"));
+        }
+        using (var denied = new Server(request => request.Url!.AbsolutePath.EndsWith("/exchange", StringComparison.Ordinal) ? "{\"state\":\"denied\"}" : "{}"))
+        {
+            var pending = new PendingSignIn("r1", denied.Url, AccountLink.NewVerifier(), TimeSpan.FromSeconds(5), DateTimeOffset.UtcNow.AddMinutes(5));
+            Check((await AccountLink.WaitAsync(denied.Url, pending, CancellationToken.None, Delay)).Outcome == "denied", "Denial is reported");
+        }
+        using (var expired = new Server(_ => "{\"detail\":\"expired\"}", 404))
+        {
+            var pending = new PendingSignIn("r1", expired.Url, AccountLink.NewVerifier(), TimeSpan.FromSeconds(5), DateTimeOffset.UtcNow.AddMinutes(5));
+            Check((await AccountLink.WaitAsync(expired.Url, pending, CancellationToken.None, Delay)).Outcome == "expired", "An expired request stops polling");
+            Check(!await AccountLink.SupportsSignInAsync(expired.Url, CancellationToken.None), "Older server without delegation falls back to API keys");
+            var old = new PendingSignIn("r1", expired.Url, AccountLink.NewVerifier(), TimeSpan.FromSeconds(5), DateTimeOffset.UtcNow.AddSeconds(-1));
+            Check((await AccountLink.WaitAsync(expired.Url, old, CancellationToken.None, Delay)).Outcome == "expired", "Local expiry stops polling");
+        }
+        using (var noDesktop = new Server(_ => "{\"desktop_apps\":[],\"clients\":[]}"))
+            Check(!await AccountLink.SupportsSignInAsync(noDesktop.Url, CancellationToken.None), "Owner switched desktop sign-in off");
+        using (var forbidden = new Server(_ => "{}", 403))
+        {
+            try { await AccountLink.StartAsync(forbidden.Url, "PC", "playnite-device", CancellationToken.None); throw new Exception("Expected refusal"); }
+            catch (AccountLinkException ex) { Check(ex.StatusCode == 403 && ex.Message.Contains("turned off"), "Explains a switched-off server"); }
+        }
+        Check(AccountLink.DeviceLabel(new string('x', 150)).Length == 100 && AccountLink.DeviceLabel(" ") == "Playnite", "Device names are bounded");
+        Check(AccountLink.NewVerifier().Length >= 43 && AccountLink.NewVerifier() != AccountLink.NewVerifier(), "Verifiers are long and random");
     }
 
     private sealed class TemporaryDirectory : IDisposable

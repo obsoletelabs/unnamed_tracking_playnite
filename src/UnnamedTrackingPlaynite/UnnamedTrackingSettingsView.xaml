@@ -1,32 +1,50 @@
 <UserControl x:Class="UnnamedTrackingPlaynite.UnnamedTrackingSettingsView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel Margin="10">
-        <TextBlock Text="Server URL" FontWeight="SemiBold" />
-        <TextBox Margin="0,5,0,12" Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}" ToolTip="Base URL for the Unnamed Tracking service." />
-        <TextBlock Text="API key" FontWeight="SemiBold" />
-        <PasswordBox x:Name="ApiKeyBox" Margin="0,5,0,12" Loaded="ApiKeyBox_Loaded" PasswordChanged="ApiKeyBox_PasswordChanged" />
-        <TextBlock Text="The API key is stored with this Playnite extension's settings." TextWrapping="Wrap" Opacity="0.7" />
-        <TextBlock Margin="0,10,0,0" Text="Ignore tag" FontWeight="SemiBold" />
-        <TextBox Margin="0,5,0,4" Text="{Binding IgnoreTag, UpdateSourceTrigger=PropertyChanged}" />
-        <TextBlock Text="Games with this tag are skipped. Leave it empty to disable the ignore filter." TextWrapping="Wrap" Opacity="0.7" />
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-            <Button x:Name="TestButton" Content="Test connection" Width="120" Margin="0,0,8,0" Click="TestButton_Click" />
-            <TextBlock x:Name="ConnectionStatus" VerticalAlignment="Center" TextWrapping="Wrap" />
-        </StackPanel>
-        <Separator Margin="0,15,0,15" />
-        <TextBlock Text="Automatic synchronization" FontWeight="SemiBold" />
-        <CheckBox Margin="0,8,0,4" Content="Sync the library when Playnite starts" IsChecked="{Binding SyncOnStartup}" />
-        <CheckBox Margin="0,0,0,8" Content="Sync a game after it stops" IsChecked="{Binding SyncOnGameStopped}" />
-        <TextBlock Text="Startup sync creates and updates games. Game-stop sync updates linked games. Both skip ignored games." TextWrapping="Wrap" Opacity="0.7" />
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="10" MaxWidth="760" HorizontalAlignment="Left">
+            <TextBlock Text="Account" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Margin="0,8,0,0" Text="Server URL" FontWeight="SemiBold" />
+            <TextBox x:Name="ServerUrlBox" Margin="0,5,0,4" Text="{Binding ApiUrl, UpdateSourceTrigger=PropertyChanged}" ToolTip="The address you open Unnamed Tracking at, for example https://tracking.example.com" TextChanged="ServerUrlBox_TextChanged" />
+            <TextBlock Text="The address you open Unnamed Tracking at in your browser." TextWrapping="Wrap" Opacity="0.7" />
 
-        <Separator Margin="0,15,0,15" />
+            <TextBlock x:Name="AccountStatus" Margin="0,12,0,6" Text="{Binding AccountSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="SignInButton" Content="Sign in with your browser" Padding="12,4" Margin="0,0,8,0" Click="SignInButton_Click" />
+                <Button x:Name="CancelSignInButton" Content="Cancel" Padding="12,4" Margin="0,0,8,0" Visibility="Collapsed" Click="CancelSignInButton_Click" />
+                <Button x:Name="SignOutButton" Content="Sign out" Padding="12,4" Margin="0,0,8,0" Click="SignOutButton_Click" />
+                <Button x:Name="TestButton" Content="Test connection" Padding="12,4" Click="TestButton_Click" />
+            </StackPanel>
+            <TextBox x:Name="SignInStatus" Margin="0,8,0,0" Visibility="Collapsed" IsReadOnly="True" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" Opacity="0.85" />
+            <TextBlock x:Name="ConnectionStatus" Margin="0,4,0,0" TextWrapping="Wrap" />
+            <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Opacity="0.7"
+                       Text="Signing in opens Unnamed Tracking in your browser, where you choose what Playnite may do. Playnite never sees your password. You can revoke it any time under Connected apps." />
 
-        <TextBlock Text="Library sync" FontWeight="SemiBold" />
-        <TextBlock Margin="0,5,0,10" Text="Manually upload your current Playnite game library to Unnamed Tracking." TextWrapping="Wrap" Opacity="0.7" />
-        <StackPanel Orientation="Horizontal">
-            <Button x:Name="UploadButton" Content="Upload Playnite Library" Width="180" HorizontalAlignment="Left" Click="UploadButton_Click" />
-            <Button x:Name="PreviewButton" Content="Preview sync" Width="120" Margin="8,0,0,0" Click="PreviewButton_Click" />
-            <Button x:Name="CancelButton" Content="Cancel" Width="80" Margin="8,0,0,0" IsEnabled="False" Click="CancelButton_Click" />
+            <Expander x:Name="ApiKeyExpander" Margin="0,12,0,0" Header="Use an API key instead (older servers)">
+                <StackPanel Margin="0,8,0,0">
+                    <PasswordBox x:Name="ApiKeyBox" Margin="0,0,0,6" Loaded="ApiKeyBox_Loaded" PasswordChanged="ApiKeyBox_PasswordChanged" />
+                    <TextBlock Text="Only needed when the server does not offer Playnite sign-in. A key starting with utk_ has full access to your account and is stored with Playnite's settings. Signing in replaces it." TextWrapping="Wrap" Opacity="0.7" />
+                </StackPanel>
+            </Expander>
+
+            <Separator Margin="0,15,0,15" />
+            <TextBlock Text="Automatic synchronization" FontSize="16" FontWeight="SemiBold" />
+            <CheckBox Margin="0,8,0,4" Content="Sync the library when Playnite starts" IsChecked="{Binding SyncOnStartup}" />
+            <CheckBox Margin="0,0,0,8" Content="Sync a game after it stops" IsChecked="{Binding SyncOnGameStopped}" />
+            <TextBlock Text="Startup sync creates and updates games. Game-stop sync updates linked games. Both skip ignored games." TextWrapping="Wrap" Opacity="0.7" />
+
+            <TextBlock Margin="0,12,0,0" Text="Ignore tag" FontWeight="SemiBold" />
+            <TextBox Margin="0,5,0,4" Text="{Binding IgnoreTag, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Text="Games with this tag are skipped. Leave it empty to disable the ignore filter." TextWrapping="Wrap" Opacity="0.7" />
+
+            <Separator Margin="0,15,0,15" />
+
+            <TextBlock Text="Library sync" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Margin="0,5,0,10" Text="Send your current Playnite library to Unnamed Tracking now. Copies of the same game from different stores can then be grouped there under one game." TextWrapping="Wrap" Opacity="0.7" />
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="UploadButton" Content="Sync library now" Padding="12,4" HorizontalAlignment="Left" Click="UploadButton_Click" />
+                <Button x:Name="PreviewButton" Content="Preview sync" Padding="12,4" Margin="8,0,0,0" Click="PreviewButton_Click" />
+                <Button x:Name="CancelButton" Content="Cancel" Padding="12,4" Margin="8,0,0,0" IsEnabled="False" Click="CancelButton_Click" />
+            </StackPanel>
+            <TextBlock x:Name="UploadStatus" Margin="0,8,0,0" TextWrapping="Wrap" Opacity="0.8" />
         </StackPanel>
-        <TextBlock x:Name="UploadStatus" Margin="0,8,0,0" TextWrapping="Wrap" Opacity="0.8" />
-    </StackPanel>
+    </ScrollViewer>
 </UserControl>

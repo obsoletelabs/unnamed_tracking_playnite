@@ -43,6 +43,14 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
 
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
     {
+        yield return new MainMenuItem
+        {
+            Description = Settings.IsSignedIn || !string.IsNullOrEmpty(Settings.AuthValue)
+                ? "Unnamed Tracking settings…"
+                : "Sign in to Unnamed Tracking…",
+            MenuSection = "@",
+            Action = args => OpenSettings()
+        };
         yield return new MainMenuItem { Description = "Cancel Unnamed Tracking synchronization", MenuSection = "@", Action = args => CancelSync() };
         yield return new MainMenuItem
         {
@@ -57,6 +65,8 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         yield return new SidebarItem
         {
             Title = "Unnamed Tracking",
+            // A Windows game-controller glyph: the package ships no image files.
+            Icon = new TextBlock { Text = "", FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"), FontSize = 20 },
             Type = SiderbarItemType.View,
             Opened = OpenSaveSyncDashboard,
             Closed = () => { }
@@ -118,7 +128,7 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         var cancellation = BeginSync();
         try
         {
-            return await _syncClient.UploadLibraryAsync(Settings.ApiUrl, Settings.AuthValue, games,
+            return await _syncClient.UploadLibraryAsync(Settings.ApiUrl, Settings.Credential, games,
                 Settings.IgnoreTag, cancellation.Token, progress, completeLibrary).ConfigureAwait(true);
         }
         finally { syncCancellation = null; cancellation.Dispose(); }
@@ -129,7 +139,7 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         var cancellation = BeginSync();
         try
         {
-            return await _syncClient.PreviewLibraryAsync(Settings.ApiUrl, Settings.AuthValue,
+            return await _syncClient.PreviewLibraryAsync(Settings.ApiUrl, Settings.Credential,
                 PlayniteApi.Database.Games.ToList(), Settings.IgnoreTag, cancellation.Token).ConfigureAwait(true);
         }
         finally { syncCancellation = null; cancellation.Dispose(); }
@@ -143,7 +153,7 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
 
     public Task<bool> TestConnectionAsync()
     {
-        return _syncClient.TestConnectionAsync(Settings.ApiUrl, Settings.AuthValue, lifetime.Token);
+        return _syncClient.TestConnectionAsync(Settings.ApiUrl, Settings.Credential, lifetime.Token);
     }
 
     public override void OnGameStarting(OnGameStartingEventArgs args)
@@ -175,7 +185,7 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         Notify("Downloading saves for '" + name + "'. Launch is paused; Cancel in the Unnamed Tracking sidebar stops the download.");
         try
         {
-            await _saveSync.DownloadAsync(id, name, Settings.ApiUrl, Settings.AuthValue, cancellation.Token).ConfigureAwait(true);
+            await _saveSync.DownloadAsync(id, name, Settings.ApiUrl, Settings.Credential, cancellation.Token).ConfigureAwait(true);
             if (lifetime.IsCancellationRequested) return;
             preparedDownloads.Add(id);
             Notify("Saves checked for '" + name + "'. Start the game again to play.");
@@ -207,10 +217,10 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
 
         var config = _saveSync.Configuration(game.Id);
         if (config.UploadOnGameStop && HasCredentials)
-            _ = RunSaveSyncAsync(() => _saveSync.UploadAsync(game, Settings.ApiUrl, Settings.AuthValue, true, saveCancellation?.Token ?? lifetime.Token), $"upload save for '{game.Name}'");
+            _ = RunSaveSyncAsync(() => _saveSync.UploadAsync(game, Settings.ApiUrl, Settings.Credential, true, saveCancellation?.Token ?? lifetime.Token), $"upload save for '{game.Name}'");
     }
 
-    private bool HasCredentials => !string.IsNullOrWhiteSpace(Settings.ApiUrl) && !string.IsNullOrWhiteSpace(Settings.AuthValue);
+    private bool HasCredentials => !string.IsNullOrWhiteSpace(Settings.ApiUrl) && !string.IsNullOrWhiteSpace(Settings.Credential);
 
     private async Task RunSaveSyncAsync(Func<Task> action, string operation)
     {
@@ -229,7 +239,7 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         var id = game.Id;
         try
         {
-            var updated = await _syncClient.UpdateGameAsync(Settings.ApiUrl, Settings.AuthValue, game, Settings.IgnoreTag, lifetime.Token).ConfigureAwait(false);
+            var updated = await _syncClient.UpdateGameAsync(Settings.ApiUrl, Settings.Credential, game, Settings.IgnoreTag, lifetime.Token).ConfigureAwait(false);
             if (!updated) { _logger.Info("Game-stop sync skipped unlinked or ignored game: " + name); return; }
             _logger.Info($"Synced stopped game '{name}' ({id}) to Unnamed Tracking.");
         }
@@ -244,11 +254,52 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
     public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
     {
         _logger.Info("Unnamed Tracking plugin loaded.");
+        // playnite://unnamedtracking/settings opens these settings and .../sync syncs the
+        // library, so the web app (or a shortcut) can hand off to Playnite.
+        PlayniteApi.UriHandler.RegisterSource(UriSource, HandleUri);
 
-        if (Settings.SyncOnStartup && !string.IsNullOrWhiteSpace(Settings.ApiUrl) && !string.IsNullOrWhiteSpace(Settings.AuthValue))
+        if (Settings.SyncOnStartup && !string.IsNullOrWhiteSpace(Settings.ApiUrl) && !string.IsNullOrWhiteSpace(Settings.Credential))
         {
             _ = SyncStartupAsync();
         }
+    }
+
+    internal const string UriSource = "unnamedtracking";
+
+    private void HandleUri(PlayniteUriEventArgs args)
+    {
+        var command = args.Arguments?.FirstOrDefault()?.Trim().ToLowerInvariant();
+        switch (command)
+        {
+            case "settings":
+                OpenSettings();
+                break;
+            case "sign-in":
+                // Only ever for the server already configured here, so a link cannot
+                // point Playnite at a different server.
+                if (Settings.IsSignedIn || string.IsNullOrWhiteSpace(Settings.ApiUrl)) OpenSettings();
+                else _ = SignInFromLinkAsync();
+                break;
+            case "sync":
+                _ = SyncLibraryAsync(PlayniteApi.Database.Games.ToList());
+                break;
+            default:
+                _logger.Warn($"Ignored unknown Unnamed Tracking link command '{command}'.");
+                break;
+        }
+    }
+
+    private void OpenSettings() => PlayniteApi.MainView.OpenPluginSettings(Id);
+
+    private async Task SignInFromLinkAsync()
+    {
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(11));
+        try
+        {
+            var connected = await Settings.SignInAsync(status => _logger.Info("Sign-in: " + status), cancellation.Token).ConfigureAwait(true);
+            Notify(connected ? "Unnamed Tracking: " + Settings.AccountSummary : "Unnamed Tracking sign-in did not complete.", !connected);
+        }
+        catch (Exception ex) { Notify("Unnamed Tracking sign-in failed: " + ex.Message, true); }
     }
 
     private async Task SyncStartupAsync()
@@ -328,14 +379,14 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         if (!upload) pendingDownloads.Add(game.Id);
         try
         {
-            var linked = await _syncClient.IsGameLinkedAsync(Settings.ApiUrl, Settings.AuthValue, game.Id, cancellation.Token).ConfigureAwait(true);
+            var linked = await _syncClient.IsGameLinkedAsync(Settings.ApiUrl, Settings.Credential, game.Id, cancellation.Token).ConfigureAwait(true);
             if (!linked)
             {
                 if (!ConfirmSyncGame(game)) return;
 
                 var result = await _syncClient.UploadLibraryAsync(
                     Settings.ApiUrl,
-                    Settings.AuthValue,
+                    Settings.Credential,
                     new[] { game },
                     Settings.IgnoreTag, cancellation.Token).ConfigureAwait(true);
 
@@ -349,8 +400,8 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
                 }
             }
 
-            if (upload) await _saveSync.UploadAsync(game, Settings.ApiUrl, Settings.AuthValue, false, cancellation.Token);
-            else await _saveSync.DownloadAsync(game, Settings.ApiUrl, Settings.AuthValue, cancellation.Token);
+            if (upload) await _saveSync.UploadAsync(game, Settings.ApiUrl, Settings.Credential, false, cancellation.Token);
+            else await _saveSync.DownloadAsync(game, Settings.ApiUrl, Settings.Credential, cancellation.Token);
             PlayniteApi.Dialogs.ShowMessage(upload ? "Save upload complete. Empty locations are skipped." : "Cloud save check complete. Available versions were restored; locations without a cloud version were skipped.", "Unnamed Tracking");
         }
         catch (OperationCanceledException) { PlayniteApi.Dialogs.ShowMessage("Save synchronization cancelled.", "Unnamed Tracking"); }
@@ -472,7 +523,7 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(Settings.ApiUrl) || string.IsNullOrWhiteSpace(Settings.AuthValue))
+            if (string.IsNullOrWhiteSpace(Settings.ApiUrl) || string.IsNullOrWhiteSpace(Settings.Credential))
             {
                 PlayniteApi.Dialogs.ShowErrorMessage("Configure the Unnamed Tracking API URL and API key in Add-ons > Extension settings first.", "Unnamed Tracking");
                 return;
