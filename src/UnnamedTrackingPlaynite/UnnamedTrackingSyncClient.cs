@@ -40,6 +40,10 @@ internal sealed class UnnamedTrackingSyncGamePayload
     [DataMember(Name = "status")] public string Status { get; set; } = string.Empty;
     [DataMember(Name = "folder_location")] public string FolderLocation { get; set; } = string.Empty;
     [DataMember(Name = "playnite_guid")] public Guid PlayniteGuid { get; set; }
+    // When Playnite added the game, so the server's "date added" matches (omitted when unknown).
+    [DataMember(Name = "created_at", EmitDefaultValue = false)] public long? CreatedAt { get; set; }
+    // The first Playnite region; every region also stays in the tags.
+    [DataMember(Name = "region", EmitDefaultValue = false)] public string? Region { get; set; }
 }
 
 [DataContract]
@@ -563,6 +567,22 @@ internal sealed class UnnamedTrackingSyncClient
         ResponseBody = ex.ResponseBody
     };
 
+    /// <summary>When Playnite added the game, as Unix seconds; null when unknown or not a plausible past date.</summary>
+    internal static long? DateAddedSeconds(Game game)
+    {
+        var added = game?.Added;
+        if (!added.HasValue || added.Value.Year < 1990) return null;
+        var utc = added.Value.Kind == DateTimeKind.Utc ? added.Value : added.Value.ToUniversalTime();
+        var seconds = new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeSeconds();
+        return seconds > DateTimeOffset.UtcNow.ToUnixTimeSeconds() ? (long?)null : seconds;
+    }
+
+    internal static string? FirstRegion(Game game)
+    {
+        var name = OrEmpty(game.Regions).Where(x => x != null).Select(x => x.Name?.Trim()).FirstOrDefault(x => !string.IsNullOrEmpty(x));
+        return name == null ? null : name.Length > 50 ? name.Substring(0, 50) : name;
+    }
+
     internal static string? FirstPlatform(Game game)
     {
         var name = OrEmpty(game.Platforms).Where(x => x != null).Select(x => x.Name?.Trim()).FirstOrDefault(x => !string.IsNullOrEmpty(x));
@@ -694,7 +714,9 @@ internal sealed class UnnamedTrackingSyncClient
             RatingOverall = game.UserScore.HasValue ? game.UserScore.Value / 10m : (decimal?)null,
             Status = MapStatus(game),
             FolderLocation = GetFolderLocation(game),
-            PlayniteGuid = game.Id
+            PlayniteGuid = game.Id,
+            CreatedAt = DateAddedSeconds(game),
+            Region = FirstRegion(game)
         };
     }
 
@@ -793,11 +815,13 @@ internal sealed class UnnamedTrackingSyncClient
     {
         var status = name?.Trim().ToLowerInvariant() ?? string.Empty;
         if (status.Contains("wishlist") || status.Contains("wish list")) return "WISHLIST";
-        if (status.Contains("dropped")) return "DROPPED";
+        if (status.Contains("dropped") || status.Contains("abandon")) return "DROPPED";
         if (status.Contains("hold")) return "ON_HOLD";
         if (status.Contains("playing") || status.Contains("progress")) return "PLAYING";
         if (status.Contains("mastered")) return "MASTERED";
         if (status.Contains("beaten") || status.Contains("completed") || status == "complete") return "BEATEN";
+        // "Not Played" contains "played": it is the unplayed backlog, not a played game.
+        if (status.Contains("not played") || status.Contains("unplayed")) return "BACKLOG";
         if (status.Contains("played")) return "PLAYED";
 
         // Playnite allows custom completion statuses. Never send an arbitrary

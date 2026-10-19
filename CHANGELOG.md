@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Quick actions in the game menu.** Set a status, rate (0-10), add a dated note, add screenshots/clips/audio
+  and add documents to a game without opening the website; open the game's page in your browser. Status, score and
+  notes are Playnite's own fields and are pushed with the normal sync. Uploading files uses the new optional
+  `content.write` capability, requested only from servers that offer it (host change required).
+- Send Playnite's date added and first region with each game.
+- Fix completion-status mapping: Playnite's default **Not Played** was sent as *Played*, and **Abandoned** as backlog;
+  they now map to backlog and *Dropped*. Quick edits wait for a running synchronization instead of failing.
+- Remember the linked remote game for a few minutes instead of scanning the server's whole game list for every
+  save upload, download and file upload.
+- Show a notification when automatic save upload or download is switched on or off for a game.
 - **Sign in with your browser instead of pasting an API key.** The extension uses
   the server's user-approved integration access (the same consent flow as the
   Discord Activity): the user approves exactly what Playnite may do, and the

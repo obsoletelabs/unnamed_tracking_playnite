@@ -29,6 +29,7 @@ nav:
   - User Guide:
       - Installation and configuration: user-guide/installation.md
       - Library synchronization: user-guide/synchronization.md
+      - Quick actions from Playnite: user-guide/quick-actions.md
       - Save synchronization and recovery: user-guide/saves.md
       - Embedded view: user-guide/embedded-view.md
       - Troubleshooting: user-guide/troubleshooting.md

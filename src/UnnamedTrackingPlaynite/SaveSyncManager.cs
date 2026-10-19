@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -52,6 +53,27 @@ internal sealed class SaveSyncManager
     private readonly SaveSyncStore store;
     private readonly string backupDirectory;
     private readonly SemaphoreSlim operationGate = new SemaphoreSlim(1, 1);
+    private readonly ConcurrentDictionary<string, RemoteIdEntry> remoteGameIds = new ConcurrentDictionary<string, RemoteIdEntry>();
+    private static readonly TimeSpan RemoteIdLifetime = TimeSpan.FromMinutes(10);
+
+    private sealed class RemoteIdEntry
+    {
+        public Guid Id;
+        public DateTime ResolvedAtUtc;
+    }
+
+    /// <summary>The linked remote game's ID for a Playnite game. Scanning the server's game list costs
+    /// one request per 200 games, so a successful answer is reused for a few minutes and dropped after
+    /// any failed operation; an unlinked game is never cached.</summary>
+    internal async Task<Guid> ResolveRemoteGameIdAsync(string apiUrl, string apiKey, Guid playniteGuid)
+    {
+        var key = apiUrl.TrimEnd('/').ToLowerInvariant() + "|" + playniteGuid;
+        if (remoteGameIds.TryGetValue(key, out var known) && DateTime.UtcNow - known.ResolvedAtUtc < RemoteIdLifetime)
+            return known.Id;
+        var id = await ResolveGameId(apiUrl, apiKey, playniteGuid).ConfigureAwait(false);
+        if (id != Guid.Empty) remoteGameIds[key] = new RemoteIdEntry { Id = id, ResolvedAtUtc = DateTime.UtcNow };
+        return id;
+    }
     private readonly CancellationTokenSource shutdown = new CancellationTokenSource();
     internal void Cancel() => shutdown.Cancel();
     internal bool IsBusy => operationGate.CurrentCount == 0;
@@ -69,8 +91,14 @@ internal sealed class SaveSyncManager
         }
         catch (WebException ex)
         {
+            remoteGameIds.Clear();
             ex.Response?.Dispose();
             if (linked.IsCancellationRequested) throw new OperationCanceledException(linked.Token);
+            throw;
+        }
+        catch (Exception)
+        {
+            remoteGameIds.Clear();
             throw;
         }
         finally { operationGate.Release(); }
@@ -120,7 +148,7 @@ internal sealed class SaveSyncManager
             return;
         }
 
-        var remoteGameId = await ResolveGameId(apiUrl, apiKey, gameId).ConfigureAwait(false);
+        var remoteGameId = await ResolveRemoteGameIdAsync(apiUrl, apiKey, gameId).ConfigureAwait(false);
         if (remoteGameId == Guid.Empty)
             throw new InvalidOperationException($"'{gameName}' is not linked to an Unnamed Tracking game yet.");
 
@@ -219,7 +247,7 @@ internal sealed class SaveSyncManager
         var locations = SaveArchive.ValidatePaths(config.SavePaths);
         if (config.SavePaths.Count == 0) return;
 
-        var remoteGameId = await ResolveGameId(apiUrl, apiKey, gameId).ConfigureAwait(false);
+        var remoteGameId = await ResolveRemoteGameIdAsync(apiUrl, apiKey, gameId).ConfigureAwait(false);
         if (remoteGameId == Guid.Empty)
             throw new InvalidOperationException($"'{gameName}' is not linked to an Unnamed Tracking game yet.");
 

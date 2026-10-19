@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Playnite.SDK;
+using Playnite.SDK.Models;
 using UnnamedTrackingPlaynite;
 
 internal static class Program
@@ -37,6 +38,7 @@ internal static class Program
     private static async Task Main()
     {
         StatusAndIdentity();
+        await ContentUploads();
         ConfigurationAndPaths();
         SaveRestore();
         await LibraryHttp();
@@ -54,7 +56,7 @@ internal static class Program
             ["On Hold"] = "ON_HOLD", ["Playing"] = "PLAYING", ["In progress"] = "PLAYING",
             ["Mastered"] = "MASTERED", ["Beaten"] = "BEATEN", ["Completed"] = "BEATEN",
             ["complete"] = "BEATEN", ["Played"] = "PLAYED", ["Backlog"] = "BACKLOG",
-            ["Plan to play"] = "BACKLOG", ["Abandoned"] = "BACKLOG", ["100%"] = "BACKLOG",
+            ["Plan to play"] = "BACKLOG", ["Abandoned"] = "DROPPED", ["Not Played"] = "BACKLOG", ["Unplayed"] = "BACKLOG", ["100%"] = "BACKLOG",
             ["未知"] = "BACKLOG"
         };
         foreach (var pair in cases)
@@ -397,6 +399,69 @@ internal static class Program
         }
     }
 
+    private static async Task ContentUploads()
+    {
+        // quick edits
+        Check(QuickEdits.TryParseScore("8", out var eight) && eight == 80, "Whole score");
+        Check(QuickEdits.TryParseScore("7,5", out var seven) && seven == 75, "Comma decimal score");
+        Check(QuickEdits.TryParseScore("  ", out var cleared) && cleared == null, "Blank score clears");
+        Check(!QuickEdits.TryParseScore("11", out _) && !QuickEdits.TryParseScore("-1", out _) && !QuickEdits.TryParseScore("abc", out _), "Invalid scores are refused");
+        var day = new DateTime(2026, 10, 19);
+        Check(QuickEdits.AppendNote(null, " first ", day) == "2026-10-19: first", "First note");
+        Check(QuickEdits.AppendNote("old\n", "next", day) == "old\n2026-10-19: next", "Later notes keep earlier text");
+
+        // the server's "date added" follows Playnite's
+        Check(UnnamedTrackingSyncClient.DateAddedSeconds(new Game("Added") { Added = new DateTime(2020, 5, 17, 12, 0, 0, DateTimeKind.Utc) }) == 1589716800, "Playnite's date added is sent as Unix seconds");
+        Check(UnnamedTrackingSyncClient.DateAddedSeconds(new Game("None")) == null, "No date added is omitted");
+        Check(UnnamedTrackingSyncClient.DateAddedSeconds(new Game("Future") { Added = DateTime.UtcNow.AddDays(3) }) == null, "A future date added is not sent");
+        Check(UnnamedTrackingSyncClient.DateAddedSeconds(new Game("Ancient") { Added = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc) }) == null, "An implausibly old date added is not sent");
+        Check(UnnamedTrackingSyncClient.FirstRegion(new Game("Region")) == null, "No region is omitted");
+
+        // the optional capability is requested only from servers that offer it
+        Check(!AccountLink.ScopesFor("{\"desktop_apps\":[\"playnite\"],\"capabilities\":{\"library.sync\":\"x\"}}").Contains("content.write"), "Older server: no content capability");
+        Check(AccountLink.ScopesFor("{\"capabilities\":{\"library.sync\":\"x\",\"content.write\":\"y\"}}").Contains("content.write"), "Offered capability is requested");
+        Check(!AccountLink.ScopesFor(null).Contains("content.write") && AccountLink.ScopesFor(null).Contains("library.sync"), "Unknown instance keeps the base scopes");
+
+        using var temp = new TemporaryDirectory();
+        var remote = Guid.NewGuid();
+        var shot = Path.Combine(temp.Path, "shot.png"); File.WriteAllText(shot, "PNGDATA");
+        var clip = Path.Combine(temp.Path, "my clip.mp4"); File.WriteAllText(clip, "MP4DATA");
+        var doc = Path.Combine(temp.Path, "manual.pdf"); File.WriteAllText(doc, "PDFDATA");
+        var empty = Path.Combine(temp.Path, "empty.png"); File.WriteAllText(empty, "");
+        var progress = new List<string>();
+        using (var server = new Server(request => "{\"results\":[{\"filename\":\"x\",\"status\":\"saved\",\"kind\":\"screenshot\"}]}"))
+        {
+            var result = await GameContentUploader.UploadAsync(server.Url, "utd_test", remote, GameContentKind.Media,
+                new[] { shot, clip, Path.Combine(temp.Path, "missing.png"), empty, shot }, (done, total, name) => progress.Add(done + "/" + total + " " + name), CancellationToken.None);
+            Check(result.Saved.Count == 2 && result.Rejected.Count == 2, "Two files saved, a missing and an empty file reported");
+            Check(result.Rejected.Any(x => x.Contains("file not found")) && result.Rejected.Any(x => x.Contains("file is empty")), "Local problems are named");
+            Check(server.Requests.Count == 2 && server.Requests.All(r => r.Method == "POST" && r.Path == $"/api/game/{remote:D}/screenshots" && r.Authorization == "Bearer utd_test"), "Media goes to the screenshots route with the credential, once per usable file");
+            Check(server.Requests[0].Body.Contains("filename=\"shot.png\"") && server.Requests[0].Body.Contains("PNGDATA") && server.Requests[0].Body.Contains("name=\"files\"") && server.Requests[0].Body.Contains("name=\"last_modified\""), "Multipart carries the file, name and modified time");
+            Check(server.Requests[1].Body.Contains("filename=\"my clip.mp4\""), "Second file is its own request");
+            Check(progress.Count == 4, "Duplicate paths are uploaded once");
+        }
+        Check(GameContentUploader.SafeFileName("a \"b\"\r\n.png") == "a b.png", "File names cannot break the multipart header");
+        Check(GameContentUploader.SafeFileName("C:\\dir\\sub/a<b>|c?.png") == "abc.png", "Characters a file name cannot hold are dropped without throwing");
+        Check(GameContentUploader.SafeFileName("\"\r\n") == "file" && GameContentUploader.SafeFileName(null!) == "file", "An empty name becomes a neutral one");
+        Check(GameContentUploader.ContentType("Shot.PNG") == "image/png" && GameContentUploader.ContentType("noextension") == "application/octet-stream", "Content type follows the extension, case-insensitively");
+        using (var server = new Server(request => "{\"results\":[{\"filename\":\"manual.pdf\",\"status\":\"saved\",\"size\":7}]}"))
+        {
+            var result = await GameContentUploader.UploadAsync(server.Url, "utd_test", remote, GameContentKind.Document, new[] { doc }, null, CancellationToken.None);
+            Check(result.Saved.SequenceEqual(new[] { "manual.pdf" }) && server.Requests.Single().Path == $"/api/game/{remote:D}/files/doc", "Documents go to the docs route");
+        }
+        using (var server = new Server(request => "{\"results\":[{\"filename\":\"a\",\"status\":\"rejected\",\"reason\":\"Unsupported file type.\"}]}"))
+        {
+            var result = await GameContentUploader.UploadAsync(server.Url, "utd_test", remote, GameContentKind.Media, new[] { doc }, null, CancellationToken.None);
+            Check(result.Saved.Count == 0 && result.Rejected.Single().Contains("Unsupported file type."), "A per-file rejection from the server is passed on");
+        }
+        using (var server = new Server(request => "{}", status: 403))
+        {
+            var result = await GameContentUploader.UploadAsync(server.Url, "utd_test", remote, GameContentKind.Media, new[] { shot, clip }, null, CancellationToken.None);
+            Check(result.Saved.Count == 0 && result.Rejected.Count == 2 && result.Rejected[0].Contains("did not allow"), "A refused capability is explained for every file");
+        }
+        await ThrowsAsync<InvalidOperationException>(async () => await GameContentUploader.UploadAsync("ftp://x", "utd_test", remote, GameContentKind.Media, new[] { shot }, null, CancellationToken.None));
+    }
+
     private static async Task SaveHttp()
     {
         using var temp = new TemporaryDirectory();
@@ -412,6 +477,10 @@ internal static class Program
             await manager.UploadAsync(game, "Game", server.Url, "utk_test");
             Check(server.Requests.Count(request => request.Path.StartsWith("/api/game/list", StringComparison.Ordinal)) == 2, "Save GUID lookup pages beyond 200 games");
             Check(manager.Configuration(game).RemoteArchiveIds[root] == archive, "Archive ID persisted");
+            var listRequests = server.Requests.Count(request => request.Path.StartsWith("/api/game/list", StringComparison.Ordinal));
+            Check(await manager.ResolveRemoteGameIdAsync(server.Url, "utk_test", game) == remote
+                && server.Requests.Count(request => request.Path.StartsWith("/api/game/list", StringComparison.Ordinal)) == listRequests,
+                "A resolved remote game ID is reused instead of scanning the game list again");
         }
         using (var server = new Server(request => request.Url!.AbsolutePath.EndsWith("/list", StringComparison.Ordinal) ? "[" + Remote(remote, game) + "]" : $"[{{\"id\":\"{archive}\",\"name\":\"Main\",\"updated_at\":1.25,\"versions\":[]}}]"))
         {
