@@ -56,7 +56,7 @@ internal static class Program
             ["On Hold"] = "ON_HOLD", ["Playing"] = "PLAYING", ["In progress"] = "PLAYING",
             ["Mastered"] = "MASTERED", ["Beaten"] = "BEATEN", ["Completed"] = "BEATEN",
             ["complete"] = "BEATEN", ["Played"] = "PLAYED", ["Backlog"] = "BACKLOG",
-            ["Plan to play"] = "BACKLOG", ["Abandoned"] = "BACKLOG", ["100%"] = "BACKLOG",
+            ["Plan to play"] = "BACKLOG", ["Abandoned"] = "DROPPED", ["Not Played"] = "BACKLOG", ["Unplayed"] = "BACKLOG", ["100%"] = "BACKLOG",
             ["未知"] = "BACKLOG"
         };
         foreach (var pair in cases)

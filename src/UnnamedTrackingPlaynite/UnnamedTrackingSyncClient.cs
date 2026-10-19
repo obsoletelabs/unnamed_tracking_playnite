@@ -815,11 +815,13 @@ internal sealed class UnnamedTrackingSyncClient
     {
         var status = name?.Trim().ToLowerInvariant() ?? string.Empty;
         if (status.Contains("wishlist") || status.Contains("wish list")) return "WISHLIST";
-        if (status.Contains("dropped")) return "DROPPED";
+        if (status.Contains("dropped") || status.Contains("abandon")) return "DROPPED";
         if (status.Contains("hold")) return "ON_HOLD";
         if (status.Contains("playing") || status.Contains("progress")) return "PLAYING";
         if (status.Contains("mastered")) return "MASTERED";
         if (status.Contains("beaten") || status.Contains("completed") || status == "complete") return "BEATEN";
+        // "Not Played" contains "played": it is the unplayed backlog, not a played game.
+        if (status.Contains("not played") || status.Contains("unplayed")) return "BACKLOG";
         if (status.Contains("played")) return "PLAYED";
 
         // Playnite allows custom completion statuses. Never send an arbitrary

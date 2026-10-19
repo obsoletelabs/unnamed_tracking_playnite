@@ -69,22 +69,47 @@ public sealed partial class UnnamedTrackingPlugin
         return false;
     }
 
+    /// <summary>A quick-edit message under its own notification ID, so it never replaces a sync's messages.</summary>
+    private void NotifyEdit(string text, bool error = false)
+    {
+        if (lifetime.IsCancellationRequested) return;
+        PlayniteApi.MainView.UIDispatcher.BeginInvoke(new Action(() =>
+        {
+            if (lifetime.IsCancellationRequested) return;
+            // Playnite keeps the first message added under an ID, so replace the previous one.
+            PlayniteApi.Notifications.Remove("unnamed-tracking-edit");
+            PlayniteApi.Notifications.Add(new NotificationMessage("unnamed-tracking-edit", text, error ? NotificationType.Error : NotificationType.Info));
+        }));
+    }
+
     /// <summary>Pushes the changed games right away and reports the outcome as a notification, not a dialog.</summary>
     private async Task PushChangesAsync(IReadOnlyCollection<Game> games, string what)
     {
         try
         {
+            // The startup or a manual sync may be running; it captured the games before this edit, so wait
+            // for it to finish and then send the change instead of refusing.
+            if (syncCancellation != null)
+            {
+                _logger.Info("Quick edit: waiting for the running synchronization before syncing: " + what);
+                NotifyEdit($"{what}. Waiting for the running synchronization to finish before syncing it…");
+                var deadline = DateTime.UtcNow.AddMinutes(10);
+                while (syncCancellation != null && DateTime.UtcNow < deadline)
+                    await Task.Delay(500, lifetime.Token).ConfigureAwait(true);
+            }
+            _logger.Info("Quick edit: syncing " + games.Count + " game(s): " + what);
             var result = await UploadGamesAsync(games).ConfigureAwait(true);
+            _logger.Info($"Quick edit: synced, {result.SucceededGames} succeeded, {result.FailedGames} failed.");
             if (result.FailedGames > 0)
-                Notify($"{what}, but the sync to Unnamed Tracking failed for {result.FailedGames} game(s). Run a sync again later.", true);
+                NotifyEdit($"{what}, but the sync to Unnamed Tracking failed for {result.FailedGames} game(s). Run a sync again later.", true);
             else
-                Notify($"{what} and synced to Unnamed Tracking.");
+                NotifyEdit($"{what} and synced to Unnamed Tracking.");
         }
-        catch (OperationCanceledException) { Notify($"{what}. The sync to Unnamed Tracking was cancelled."); }
+        catch (OperationCanceledException) { NotifyEdit($"{what}. The sync to Unnamed Tracking was cancelled."); }
         catch (Exception ex)
         {
             _logger.Error("Could not sync a quick edit: " + ex);
-            Notify($"{what}, but it could not be synced to Unnamed Tracking: {ex.Message}", true);
+            NotifyEdit($"{what}, but it could not be synced to Unnamed Tracking: {ex.Message}", true);
         }
     }
 
@@ -144,6 +169,7 @@ public sealed partial class UnnamedTrackingPlugin
         }
         var paths = PlayniteApi.Dialogs.SelectFiles(kind == GameContentKind.Media ? GameContentUploader.MediaFilter : GameContentUploader.DocumentFilter);
         if (paths == null || paths.Count == 0) return;
+        _logger.Info($"Content upload: {paths.Count} {(kind == GameContentKind.Media ? "media" : "document")} file(s) for '{game.Name}'.");
         if (!await contentGate.WaitAsync(0).ConfigureAwait(true))
         {
             PlayniteApi.Dialogs.ShowMessage("Another upload is still running. Wait for it to finish.", "Unnamed Tracking");
@@ -162,12 +188,13 @@ public sealed partial class UnnamedTrackingPlugin
             }
             var result = await GameContentUploader.UploadAsync(
                 Settings.ApiUrl, Settings.Credential, remoteId, kind, paths,
-                (done, total, name) => Notify($"Uploading {done}/{total}: {name}"), lifetime.Token).ConfigureAwait(true);
+                (done, total, name) => NotifyEdit($"Uploading {done}/{total}: {name}"), lifetime.Token).ConfigureAwait(true);
             var summary = $"'{game.Name}': {result.Summary()}";
+            _logger.Info("Content upload finished: " + summary);
             if (result.HasProblems) PlayniteApi.Dialogs.ShowErrorMessage(summary, "Unnamed Tracking");
-            else Notify(summary);
+            else NotifyEdit(summary);
         }
-        catch (OperationCanceledException) { Notify("Upload cancelled."); }
+        catch (OperationCanceledException) { NotifyEdit("Upload cancelled."); }
         catch (Exception ex)
         {
             _logger.Error("Could not upload content for '" + game.Name + "': " + ex);

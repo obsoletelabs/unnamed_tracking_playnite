@@ -206,8 +206,10 @@ public sealed partial class UnnamedTrackingPlugin : GenericPlugin
         if (lifetime.IsCancellationRequested) return;
         PlayniteApi.MainView.UIDispatcher.BeginInvoke(new Action(() =>
         {
-            if (!lifetime.IsCancellationRequested)
-                PlayniteApi.Notifications.Add(new NotificationMessage("unnamed-tracking-sync", text, error ? NotificationType.Error : NotificationType.Info));
+            if (lifetime.IsCancellationRequested) return;
+            // Playnite keeps the first message added under an ID, so replace the previous one.
+            PlayniteApi.Notifications.Remove("unnamed-tracking-sync");
+            PlayniteApi.Notifications.Add(new NotificationMessage("unnamed-tracking-sync", text, error ? NotificationType.Error : NotificationType.Info));
         }));
     }
 
