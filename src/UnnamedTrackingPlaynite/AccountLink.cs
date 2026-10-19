@@ -26,7 +26,19 @@ internal static class AccountLink
     internal const string CredentialPrefix = "utd_";
     // What the extension needs: who you are (for "Connected as"), library sync and saves.
     internal static readonly string[] Scopes = { "profile.read", "library.sync", "saves.read", "saves.write" };
+    /// <summary>Optional: adding screenshots, clips and documents. Only requested from servers that offer it,
+    /// so an older server's sign-in is never refused for an unknown capability.</summary>
+    internal const string ContentScope = "content.write";
     private const string Base = "/api/delegation/v1";
+
+    /// <summary>The scopes to request, given the instance description the server returned.</summary>
+    internal static List<string> ScopesFor(string? instanceJson)
+    {
+        var scopes = new List<string>(Scopes);
+        if (!string.IsNullOrEmpty(instanceJson) && System.Text.RegularExpressions.Regex.IsMatch(instanceJson, @"""content\.write""\s*:"))
+            scopes.Add(ContentScope);
+        return scopes;
+    }
 
     /// <summary>True when the server offers desktop sign-in (older servers need an API key).</summary>
     internal static async Task<bool> SupportsSignInAsync(string apiUrl, CancellationToken cancellationToken)
@@ -47,9 +59,15 @@ internal static class AccountLink
     {
         var baseUrl = ApiConnection.ValidateBaseUrl(apiUrl);
         var verifier = NewVerifier();
+        string? instance = null;
+        using (ApiConnection.UseCancellation(cancellationToken))
+        {
+            try { instance = await SendAsync(baseUrl, Base + "/instance", "GET", null, null).ConfigureAwait(false); }
+            catch (AccountLinkException) { }
+        }
         var body = Serialize(new DesktopAccessBody
         {
-            Scopes = new List<string>(Scopes),
+            Scopes = ScopesFor(instance),
             CodeChallenge = Challenge(verifier),
             DeviceName = DeviceLabel(deviceName),
             DeviceId = deviceId

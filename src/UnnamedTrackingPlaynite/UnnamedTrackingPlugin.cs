@@ -12,7 +12,7 @@ using Playnite.SDK.Plugins;
 
 namespace UnnamedTrackingPlaynite;
 
-public sealed class UnnamedTrackingPlugin : GenericPlugin
+public sealed partial class UnnamedTrackingPlugin : GenericPlugin
 {
     public override Guid Id { get; } = Guid.Parse("4A8D9C7B-2E54-4A6B-9C6D-0A2B8F1E7D43");
 
@@ -52,6 +52,12 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
             Action = args => OpenSettings()
         };
         yield return new MainMenuItem { Description = "Cancel Unnamed Tracking synchronization", MenuSection = "@", Action = args => CancelSync() };
+        yield return new MainMenuItem
+        {
+            Description = "Open Unnamed Tracking in your browser",
+            MenuSection = "@",
+            Action = args => OpenTrackingPage(string.Empty)
+        };
         yield return new MainMenuItem
         {
             Description = "Sync library to Unnamed Tracking",
@@ -463,6 +469,17 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
             Description = "Sync selected games to Unnamed Tracking",
             Action = menuArgs => { _ = SyncLibraryAsync(menuArgs.Games.ToList()); }
         };
+        if (args.Games.Count == 1)
+        {
+            var linkedGame = args.Games[0];
+            yield return new GameMenuItem
+            {
+                MenuSection = "Unnamed Tracking",
+                Description = "Open in Unnamed Tracking",
+                Action = menuArgs => { _ = OpenGameInBrowserAsync(linkedGame); }
+            };
+        }
+        foreach (var item in GetContentMenuItems(args.Games)) yield return item;
         foreach (var game in args.Games)
         {
             var config = _saveSync.Configuration(game.Id);
@@ -498,6 +515,44 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
         }
     }
 
+    private void OpenTrackingPage(string path)
+    {
+        try
+        {
+            var url = ApiConnection.ValidateBaseUrl(Settings.ApiUrl) + path;
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("Could not open Unnamed Tracking in the browser: " + ex.Message);
+            PlayniteApi.Dialogs.ShowErrorMessage("Could not open Unnamed Tracking. Check the server URL in the extension settings. " + ex.Message, "Unnamed Tracking");
+        }
+    }
+
+    private async Task OpenGameInBrowserAsync(Game game)
+    {
+        if (!HasCredentials)
+        {
+            PlayniteApi.Dialogs.ShowErrorMessage("Sign in to Unnamed Tracking in the extension settings first.", "Unnamed Tracking");
+            return;
+        }
+        try
+        {
+            var remoteId = await _saveSync.ResolveRemoteGameIdAsync(Settings.ApiUrl, Settings.Credential, game.Id).ConfigureAwait(true);
+            if (remoteId == Guid.Empty)
+            {
+                PlayniteApi.Dialogs.ShowMessage("'" + game.Name + "' is not in Unnamed Tracking yet. Use \"Sync selected games to Unnamed Tracking\" first.", "Unnamed Tracking");
+                return;
+            }
+            OpenTrackingPage("/games/" + remoteId.ToString("D"));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("Could not find '" + game.Name + "' in Unnamed Tracking: " + ex.Message);
+            PlayniteApi.Dialogs.ShowErrorMessage("Could not look up '" + game.Name + "' in Unnamed Tracking. " + ex.Message, "Unnamed Tracking");
+        }
+    }
+
     private void SetSaveSyncDirection(Game game, bool upload, bool enabled)
     {
         var current = _saveSync.Configuration(game.Id);
@@ -515,6 +570,10 @@ public sealed class UnnamedTrackingPlugin : GenericPlugin
             current.SavePaths,
             upload ? enabled : current.UploadOnGameStop,
             upload ? current.DownloadOnGameStart : enabled);
+            PlayniteApi.Notifications.Add(new NotificationMessage(
+                "unnamed-tracking-save-flags-" + game.Id,
+                (upload ? "Upload on game stop " : "Download on game start ") + (enabled ? "enabled" : "disabled") + " for " + game.Name + ".",
+                NotificationType.Info));
         }
         catch (Exception ex) { PlayniteApi.Dialogs.ShowErrorMessage(ex.Message, "Unnamed Tracking"); }
     }

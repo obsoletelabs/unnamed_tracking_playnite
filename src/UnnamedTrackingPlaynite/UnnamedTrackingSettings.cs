@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Playnite.SDK;
@@ -16,6 +17,7 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
     private string protectedCredential = string.Empty;
     private string signedInServer = string.Empty;
     private string connectedAs = string.Empty;
+    private string grantedScopes = string.Empty;
     private string deviceId = string.Empty;
     private string editingApiUrl = string.Empty;
     private string editingAuthValue = string.Empty;
@@ -43,6 +45,17 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         get => authValue;
         set => SetValue(ref authValue, value ?? string.Empty);
     }
+
+    /// <summary>The capabilities the user approved at sign-in, space separated. An API key has no such list.</summary>
+    public string GrantedScopes
+    {
+        get => grantedScopes;
+        set => SetValue(ref grantedScopes, value ?? string.Empty);
+    }
+
+    /// <summary>True when this sign-in may use the capability. A legacy API key is not limited by capability.</summary>
+    public bool HasScope(string scope) =>
+        !IsSignedIn || GrantedScopes.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Contains(scope, StringComparer.Ordinal);
 
     /// <summary>The sign-in credential (utd_), DPAPI-encrypted for this Windows user.</summary>
     public string ProtectedCredential
@@ -130,6 +143,7 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
                 ProtectedCredential = savedSettings.ProtectedCredential;
                 SignedInServer = savedSettings.SignedInServer;
                 ConnectedAs = savedSettings.ConnectedAs;
+                GrantedScopes = savedSettings.GrantedScopes;
                 DeviceId = savedSettings.DeviceId;
                 IgnoreTag = savedSettings.IgnoreTag ?? "trackingapp_ignore";
                 SyncOnStartup = savedSettings.SyncOnStartup;
@@ -196,6 +210,7 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
             return false;
         }
         ProtectedCredential = CredentialProtection.Protect(result.Credential!);
+        GrantedScopes = string.Join(" ", result.Scopes);
         SignedInServer = server;
         try { ConnectedAs = await AccountLink.DisplayNameAsync(server, result.Credential!, cancellationToken).ConfigureAwait(true); }
         catch (Exception) { ConnectedAs = string.Empty; } // profile.read may have been unticked
@@ -212,6 +227,7 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         ProtectedCredential = string.Empty;
         SignedInServer = string.Empty;
         ConnectedAs = string.Empty;
+        GrantedScopes = string.Empty;
         plugin?.SavePluginSettings(this);
         if (credential != null && !string.IsNullOrEmpty(server))
             await AccountLink.SignOutAsync(server, credential, cancellationToken).ConfigureAwait(true);
