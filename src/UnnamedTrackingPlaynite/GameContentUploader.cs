@@ -161,17 +161,23 @@ internal static class GameContentUploader
         }
     }
 
-    /// <summary>A header-safe file name: no path, quotes or line breaks.</summary>
+    private const string UnsafeFileNameCharacters = "\"<>|:*?\\/";
+
+    /// <summary>A header-safe file name: no path, quotes, line breaks or other characters a file name
+    /// cannot hold. Does not use the Path APIs: .NET Framework throws from them on those characters.</summary>
     internal static string SafeFileName(string path)
     {
-        var name = Path.GetFileName(path ?? string.Empty);
-        var cleaned = new string(name.Where(c => c >= ' ' && c != '"' && c != '\\' && c != '/').ToArray()).Trim();
+        var text = path ?? string.Empty;
+        var cut = Math.Max(text.LastIndexOf('\\'), text.LastIndexOf('/'));
+        var name = cut >= 0 ? text.Substring(cut + 1) : text;
+        var cleaned = new string(name.Where(c => c >= ' ' && UnsafeFileNameCharacters.IndexOf(c) < 0).ToArray()).Trim();
         return string.IsNullOrEmpty(cleaned) ? "file" : cleaned;
     }
 
     internal static string ContentType(string fileName)
     {
-        switch (Path.GetExtension(fileName)?.ToLowerInvariant())
+        var dot = (fileName ?? string.Empty).LastIndexOf('.');
+        switch (dot < 0 ? string.Empty : fileName!.Substring(dot).ToLowerInvariant())
         {
             case ".png": return "image/png";
             case ".jpg":

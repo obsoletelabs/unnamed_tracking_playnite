@@ -441,6 +441,9 @@ internal static class Program
             Check(progress.Count == 4, "Duplicate paths are uploaded once");
         }
         Check(GameContentUploader.SafeFileName("a \"b\"\r\n.png") == "a b.png", "File names cannot break the multipart header");
+        Check(GameContentUploader.SafeFileName("C:\\dir\\sub/a<b>|c?.png") == "abc.png", "Characters a file name cannot hold are dropped without throwing");
+        Check(GameContentUploader.SafeFileName("\"\r\n") == "file" && GameContentUploader.SafeFileName(null!) == "file", "An empty name becomes a neutral one");
+        Check(GameContentUploader.ContentType("Shot.PNG") == "image/png" && GameContentUploader.ContentType("noextension") == "application/octet-stream", "Content type follows the extension, case-insensitively");
         using (var server = new Server(request => "{\"results\":[{\"filename\":\"manual.pdf\",\"status\":\"saved\",\"size\":7}]}"))
         {
             var result = await GameContentUploader.UploadAsync(server.Url, "utd_test", remote, GameContentKind.Document, new[] { doc }, null, CancellationToken.None);
