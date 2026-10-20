@@ -14,20 +14,24 @@ actions cover the everyday edits so you do not have to open the website for them
 
 There is also **Open Unnamed Tracking in your browser** in Playnite's main menu.
 
-## Playnite stays the source of truth
+## Status, score and shared notes
 
-Status, score and notes are Playnite's own fields. The actions change them in Playnite and push the change
-right away with the normal library sync, so the next sync never undoes them. Changing a status, score or note
-on the website only affects the website until you change it again in Playnite; the extension does not read
-those fields back.
+Status and score actions change Playnite's fields and push them to the website.
+Notes synchronize in both directions with the app's dedicated **Playnite** Markdown
+note, using [conflict copies](synchronization.md#two-way-notes) when both sides changed.
+The note action needs approval of `notes.read` and `notes.write`; it offers a browser
+permission review before changing the local note if those permissions are missing.
 
 ## Screenshots, clips and documents
 
 Uploading files needs one extra capability, **Add screenshots, clips, soundtracks and documents to your
 games**. Sign in from the extension settings and keep it ticked on the approval page. The extension asks for it
 only from servers that offer it, so signing in to an older server is not refused. If you signed in before this
-existed, or unticked it, the menu actions tell you to sign in again. A legacy API key is not limited by
-capability.
+existed, or unticked it, the menu actions offer to review the current connection's
+permissions in your browser. Cancelling keeps the existing connection. A server
+that does not advertise the capability gets a specific update message. You can also
+use **Review app permissions** in the extension settings. A legacy API key is not
+limited by capability.
 
 Each file is its own upload. The server enforces the allowed file types and the size limits you or your
 administrator set under **Administration → Limits**; a reverse proxy in front of the server can have a lower

@@ -35,8 +35,14 @@ internal static partial class Program
         throw new Exception("Expected " + typeof(T).Name);
     }
 
-    private static async Task Main()
+    private static async Task Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--live-notes")
+        {
+            await LiveNotesHttp(args[1]);
+            Console.WriteLine("Passed " + assertions + " assertions against the isolated live host.");
+            return;
+        }
         StatusAndIdentity();
         await ContentUploads();
         ConfigurationAndPaths();
