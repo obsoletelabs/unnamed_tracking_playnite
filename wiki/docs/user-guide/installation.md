@@ -45,8 +45,11 @@ It names this computer and lists exactly what the extension asks for:
 | Add and update games, artwork and launcher details | Library sync, artwork and Playnite evidence |
 | List and download your game save backups | Save download and restore |
 | Upload new save backups and rename existing ones | Save upload |
+| Add screenshots, clips and documents | Optional file uploads when the server advertises `content.write` |
+| Read named notes from your games | Read the dedicated Playnite note when `notes.read` is offered |
+| Add and update named notes in your games | Create/update the dedicated note and conflict copies when `notes.write` is offered |
 
-All four start selected and access lasts *Until revoked*, like the API key it
+Available capabilities start selected and access lasts *Until revoked*, like the API key it
 replaces; you can untick any of them or choose a timed grant. Approve, return to
 Playnite, and the extension finishes signing in by itself within a few seconds.
 If the browser did not open, the settings show the address to visit. **Cancel**
@@ -67,6 +70,14 @@ used for the server it was issued by: changing the server URL needs a new sign-i
 **Sign out** removes the credential from Playnite and revokes it on the server.
 You can also review, reduce or revoke access at any time in Unnamed Tracking under
 **Account → Connected apps**, where this computer is listed as a desktop app.
+
+An existing connection does not gain newly offered permissions automatically.
+Click **Review app permissions** to approve a replacement connection with the
+server's currently available capabilities. The old connection stays in place if
+you cancel, deny access or cannot reach the server. When a quick action needs an
+unapproved capability, it checks what the server supports and offers this review;
+an unsupported server instead gets a specific update message. The background
+library sync never opens a permission prompt by itself.
 
 ![Connected apps lists Playnite as a desktop app](../assets/connected-apps.jpg)
 

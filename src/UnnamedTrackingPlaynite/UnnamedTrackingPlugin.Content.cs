@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
@@ -11,14 +12,57 @@ using Playnite.SDK.Plugins;
 namespace UnnamedTrackingPlaynite;
 
 // Everyday edits from Playnite without opening the website. Status, score and notes are Playnite's own
-// fields: they are changed here and then pushed with the normal library sync, so Playnite stays the
-// source of truth and the next sync never undoes them. Screenshots, clips and documents use the host's
+// fields: they are changed here and then sent through normal library sync. The dedicated Playnite
+// note synchronizes in both directions and preserves conflicts. Screenshots, clips and documents use the host's
 // upload routes and need the "add screenshots, clips and documents" capability.
 public sealed partial class UnnamedTrackingPlugin
 {
     private const string TrackingMenu = "Unnamed Tracking";
     private const string StatusMenu = "Unnamed Tracking|Set status";
     private readonly SemaphoreSlim contentGate = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim accessGate = new SemaphoreSlim(1, 1);
+
+    private async Task<bool> EnsureCapabilitiesAsync(string purpose, params string[] required)
+    {
+        if (!RequireSignIn()) return false;
+        if (required.All(Settings.HasScope)) return true;
+        if (!await accessGate.WaitAsync(0).ConfigureAwait(true))
+        {
+            PlayniteApi.Dialogs.ShowMessage("A connection update is already running. Finish it in your browser first.", "Unnamed Tracking");
+            return false;
+        }
+        try
+        {
+            var offered = await AccountLink.SupportedCapabilitiesAsync(Settings.ApiUrl, lifetime.Token).ConfigureAwait(true);
+            if (required.Any(scope => !offered.Contains(scope)))
+            {
+                PlayniteApi.Dialogs.ShowErrorMessage("This server does not yet support " + purpose +
+                    ". Update the Unnamed Tracking server, then review app permissions in the extension settings.", "Unnamed Tracking");
+                return false;
+            }
+            var answer = PlayniteApi.Dialogs.ShowMessage("This connection has not been allowed to " + purpose +
+                ". Review updated permissions in your browser now? Your current connection stays available if you cancel.",
+                "Update Unnamed Tracking access", MessageBoxButton.YesNo);
+            if (answer != MessageBoxResult.Yes) return false;
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            cancellation.CancelAfter(TimeSpan.FromMinutes(11));
+            var connected = await Settings.SignInAsync(text => NotifyEdit(text), cancellation.Token).ConfigureAwait(true);
+            if (!connected || !required.All(Settings.HasScope))
+            {
+                NotifyEdit("The requested access was not approved. Your local files and notes were kept.", true);
+                return false;
+            }
+            return true;
+        }
+        catch (OperationCanceledException) { NotifyEdit("Access review cancelled. Your local data was kept."); return false; }
+        catch (Exception ex)
+        {
+            PlayniteApi.Dialogs.ShowErrorMessage("Could not check or update app access: " + ex.Message +
+                " Your current connection and local data were kept.", "Unnamed Tracking");
+            return false;
+        }
+        finally { accessGate.Release(); }
+    }
 
     private IEnumerable<GameMenuItem> GetContentMenuItems(IReadOnlyList<Game> games)
     {
@@ -102,6 +146,9 @@ public sealed partial class UnnamedTrackingPlugin
             _logger.Info($"Quick edit: synced, {result.SucceededGames} succeeded, {result.FailedGames} failed.");
             if (result.FailedGames > 0)
                 NotifyEdit($"{what}, but the sync to Unnamed Tracking failed for {result.FailedGames} game(s). Run a sync again later.", true);
+            else if (result.WarningCount > 0)
+                NotifyEdit($"{what}. Game metadata synced, but {result.WarningCount} item(s) need attention: " +
+                    string.Join("; ", result.Warnings.Select(warning => warning.Operation + ": " + warning.ResponseBody)), true);
             else
                 NotifyEdit($"{what} and synced to Unnamed Tracking.");
         }
@@ -144,7 +191,8 @@ public sealed partial class UnnamedTrackingPlugin
 
     private async Task AddNoteAsync(Game game)
     {
-        if (!RequireSignIn()) return;
+        if (!await EnsureCapabilitiesAsync("read and update the shared Playnite note",
+                AccountLink.NotesReadScope, AccountLink.NotesWriteScope).ConfigureAwait(true)) return;
         var answer = PlayniteApi.Dialogs.SelectString("Add a dated line to the notes of " + game.Name + ".", "Add note", string.Empty);
         if (answer == null || !answer.Result || string.IsNullOrWhiteSpace(answer.SelectedString)) return;
         game.Notes = QuickEdits.AppendNote(game.Notes, answer.SelectedString, DateTime.Now);
@@ -154,14 +202,7 @@ public sealed partial class UnnamedTrackingPlugin
 
     private async Task AddContentAsync(Game game, GameContentKind kind)
     {
-        if (!RequireSignIn()) return;
-        if (!Settings.HasScope(AccountLink.ContentScope))
-        {
-            PlayniteApi.Dialogs.ShowErrorMessage(
-                "This sign-in was not allowed to add screenshots, clips or documents. Sign in again from the extension settings and allow adding screenshots, clips and documents. " +
-                "(Servers that do not offer this yet need an update.)", "Unnamed Tracking");
-            return;
-        }
+        if (!await EnsureCapabilitiesAsync("add screenshots, clips and documents", AccountLink.ContentScope).ConfigureAwait(true)) return;
         if (UnnamedTrackingSyncClient.HasIgnoreTag(game, Settings.IgnoreTag))
         {
             PlayniteApi.Dialogs.ShowMessage("This game has the configured ignore tag. Remove it before adding files.", "Unnamed Tracking");

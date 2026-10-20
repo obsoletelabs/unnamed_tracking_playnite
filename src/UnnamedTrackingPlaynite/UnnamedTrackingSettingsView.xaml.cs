@@ -26,6 +26,7 @@ public partial class UnnamedTrackingSettingsView : UserControl
         var waiting = signIn != null;
         var signedIn = settings?.IsSignedIn == true;
         SignInButton.Visibility = !signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
+        ReviewAccessButton.Visibility = signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
         CancelSignInButton.Visibility = waiting ? Visibility.Visible : Visibility.Collapsed;
         SignOutButton.Visibility = signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
         SignInButton.IsEnabled = !string.IsNullOrWhiteSpace(settings?.ApiUrl);
@@ -42,7 +43,7 @@ public partial class UnnamedTrackingSettingsView : UserControl
 
     private async void SignInButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!(DataContext is UnnamedTrackingSettings settings)) return;
+        if (!(DataContext is UnnamedTrackingSettings settings) || signIn != null) return;
         signIn = new CancellationTokenSource(TimeSpan.FromMinutes(11));
         RefreshAccount();
         ConnectionStatus.Text = string.Empty;

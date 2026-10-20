@@ -111,11 +111,20 @@ internal sealed class UnnamedTrackingSyncClient
     private readonly ILogger logger;
     private readonly IPlayniteAPI playniteApi;
     private readonly SemaphoreSlim mutationGate = new SemaphoreSlim(1, 1);
+    private readonly string? notesDirectory;
+    private readonly Func<Guid, string, string, Task<bool>>? applyNote;
+    private readonly Func<bool>? notesAllowed;
+    private PlayniteNotesSync? notes;
 
-    public UnnamedTrackingSyncClient(ILogger logger, IPlayniteAPI playniteApi)
+    public UnnamedTrackingSyncClient(ILogger logger, IPlayniteAPI playniteApi,
+        string? notesDirectory = null, Func<Guid, string, string, Task<bool>>? applyNote = null,
+        Func<bool>? notesAllowed = null)
     {
         this.logger = logger;
         this.playniteApi = playniteApi;
+        this.notesDirectory = notesDirectory;
+        this.applyNote = applyNote;
+        this.notesAllowed = notesAllowed;
     }
 
     internal List<SyncGameSnapshot> Capture(IEnumerable<Game> games, string ignoreTag)
@@ -168,6 +177,7 @@ internal sealed class UnnamedTrackingSyncClient
             }
 
             var evidenceHost = await NegotiateAsync(apiUrl, authValue).ConfigureAwait(false);
+            var notesHost = await PrepareNotesAsync(apiUrl, result).ConfigureAwait(false);
             var synced = new List<SyncGameSnapshot>();
             for (var index = 0; index < sourceGames.Count; index++)
             {
@@ -212,6 +222,8 @@ internal sealed class UnnamedTrackingSyncClient
                         Title = payload.Title,
                         Source = payload.Source
                     };
+                    if (notesHost)
+                        await SyncNotesAsync(apiUrl, authValue, remoteId, game, result).ConfigureAwait(false);
                     operation = "Artwork (key art)";
                     try
                     {
@@ -347,12 +359,14 @@ internal sealed class UnnamedTrackingSyncClient
                 Serialize(payload)).ConfigureAwait(false);
 
             await ApplyAtLauncherParentAsync(apiUrl, authValue, remote.Id, snapshot, remoteGames).ConfigureAwait(false);
+            var update = new UnnamedTrackingUploadResult();
+            if (await PrepareNotesAsync(apiUrl, update).ConfigureAwait(false))
+                await SyncNotesAsync(apiUrl, authValue, remote.Id, snapshot, update).ConfigureAwait(false);
             if (await NegotiateAsync(apiUrl, authValue).ConfigureAwait(false))
             {
-                var update = new UnnamedTrackingUploadResult();
                 await ReportEvidenceAsync(apiUrl, authValue, new[] { snapshot }, update).ConfigureAwait(false);
-                foreach (var warning in update.Warnings) logger.Warn($"Observation warning for '{snapshot.Name}': HTTP {warning.StatusCode}");
             }
+            foreach (var warning in update.Warnings) logger.Warn($"{warning.Operation} warning for '{snapshot.Name}': {warning.ResponseBody}");
             return true;
         }
         finally { mutationGate.Release(); }
@@ -491,7 +505,43 @@ internal sealed class UnnamedTrackingSyncClient
         finally { try { File.Delete(tempPath); } catch { } }
     }
 
-    private async Task<string> SendJsonAsync(string endpoint, string authValue, string method, string? body)
+    private async Task<bool> PrepareNotesAsync(string apiUrl, UnnamedTrackingUploadResult result)
+    {
+        if (notesDirectory == null || applyNote == null) return false;
+        try
+        {
+            var capabilities = await AccountLink.SupportedCapabilitiesAsync(apiUrl, ApiConnection.Token).ConfigureAwait(false);
+            if (!capabilities.Contains(AccountLink.NotesReadScope) || !capabilities.Contains(AccountLink.NotesWriteScope))
+                throw new InvalidOperationException("This server does not offer named-note synchronization yet. Update the server to sync the Playnite note in both directions.");
+            if (notesAllowed?.Invoke() != true)
+                throw new InvalidOperationException("Review app permissions in the extension settings to allow reading and updating game notes. Your local notes were kept.");
+            notes ??= new PlayniteNotesSync(notesDirectory, SendJsonAsync, applyNote);
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            result.Warnings.Add(new UnnamedTrackingUploadFailure { Operation = "Notes", ResponseBody = ex.Message });
+            return false;
+        }
+    }
+
+    private async Task SyncNotesAsync(string apiUrl, string credential, Guid remoteId,
+        SyncGameSnapshot game, UnnamedTrackingUploadResult result)
+    {
+        try { await notes!.SyncAsync(apiUrl, credential, remoteId, game.Id, game.Payload.Notes).ConfigureAwait(false); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            result.Warnings.Add(new UnnamedTrackingUploadFailure
+            {
+                GameId = game.Id, GameName = game.Name, Operation = "Notes", ResponseBody = ex.Message
+            });
+            logger.Warn("Note synchronization needs attention for '" + game.Name + "': " + ex.Message);
+        }
+    }
+
+    internal async Task<string> SendJsonAsync(string endpoint, string authValue, string method, string? body)
     {
         var requestId = Guid.NewGuid().ToString("N");
         var stopwatch = Stopwatch.StartNew();
@@ -522,7 +572,7 @@ internal sealed class UnnamedTrackingSyncClient
         {
             using (var response = ApiConnection.EnsureSuccess((HttpWebResponse)await request.GetResponseAsync().ConfigureAwait(false)))
             using (var stream = response.GetResponseStream())
-            using (var reader = new StreamReader(stream ?? Stream.Null, Encoding.UTF8))
+            using (var reader = new StreamReader(stream ?? Stream.Null, new UTF8Encoding(false, true), false))
             {
                 var responseBody = await reader.ReadToEndAsync().ConfigureAwait(false);
                 stopwatch.Stop();

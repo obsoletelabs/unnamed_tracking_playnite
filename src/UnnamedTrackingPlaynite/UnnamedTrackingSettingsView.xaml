@@ -9,6 +9,7 @@
             <TextBlock x:Name="AccountStatus" Margin="0,12,0,6" Text="{Binding AccountSummary}" FontWeight="SemiBold" TextWrapping="Wrap" />
             <StackPanel Orientation="Horizontal">
                 <Button x:Name="SignInButton" Content="Sign in with your browser" Padding="12,4" Margin="0,0,8,0" Click="SignInButton_Click" />
+                <Button x:Name="ReviewAccessButton" Content="Review app permissions" Padding="12,4" Margin="0,0,8,0" Click="SignInButton_Click" />
                 <Button x:Name="CancelSignInButton" Content="Cancel" Padding="12,4" Margin="0,0,8,0" Visibility="Collapsed" Click="CancelSignInButton_Click" />
                 <Button x:Name="SignOutButton" Content="Sign out" Padding="12,4" Margin="0,0,8,0" Click="SignOutButton_Click" />
                 <Button x:Name="TestButton" Content="Test connection" Padding="12,4" Click="TestButton_Click" />

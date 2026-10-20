@@ -101,7 +101,7 @@ current lookup index. Host folder uniqueness handles competing instances with
 | --- | --- |
 | `Id` | `playnite_guid` UUID; never library/storefront ID |
 | `Name`, `SortingName` | `title`, `sort_title`; missing sorting name falls back to title |
-| `Description`, `Notes` | `description`, `notes` |
+| `Description`, `Notes` | `description`, legacy `notes`; the dedicated Playnite Markdown note also uses the scoped named-note API |
 | `ReleaseDate` | `release_date` as `yyyy-MM-dd` or null |
 | Developers, publishers, series | Joined distinct names in `developer`, `publisher`, `series` |
 | Tags | `tags` with original names |
