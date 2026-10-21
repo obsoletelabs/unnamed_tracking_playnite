@@ -1,6 +1,6 @@
 # Unnamed Tracking for Playnite
 
-A Playnite 10 companion extension for one-way library and save synchronization
+A Playnite 10 companion extension for library, two-way notes and save synchronization
 with an Unnamed Tracking account. **0.2.0 restores the recovered release.** The
 extension keeps the existing `net462` / PlayniteSDK 6.17.0 generic-plugin model.
 
@@ -44,6 +44,12 @@ never sends arbitrary custom status names to the host enum. Library sync overwri
 mapped remote fields with Playnite values. Save transfers are separately configured
 per game. Automatic download pauses the first launch; start the game again after
 the success notification. See the wiki before enabling automatic saves.
+
+On hosts offering named-note permissions, the **Playnite** Markdown note syncs in
+both directions; simultaneous edits are retained as conflict copies. Existing
+connections need **Review app permissions** to approve note access or adding files.
+Cancelling this review keeps the current connection. See
+[note synchronization](wiki/docs/user-guide/synchronization.md#two-way-notes).
 
 ## Build, test and package
 

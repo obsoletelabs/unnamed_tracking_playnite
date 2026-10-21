@@ -29,15 +29,35 @@ internal static class AccountLink
     /// <summary>Optional: adding screenshots, clips and documents. Only requested from servers that offer it,
     /// so an older server's sign-in is never refused for an unknown capability.</summary>
     internal const string ContentScope = "content.write";
+    internal const string NotesReadScope = "notes.read";
+    internal const string NotesWriteScope = "notes.write";
     private const string Base = "/api/delegation/v1";
 
     /// <summary>The scopes to request, given the instance description the server returned.</summary>
     internal static List<string> ScopesFor(string? instanceJson)
     {
         var scopes = new List<string>(Scopes);
-        if (!string.IsNullOrEmpty(instanceJson) && System.Text.RegularExpressions.Regex.IsMatch(instanceJson, @"""content\.write""\s*:"))
-            scopes.Add(ContentScope);
+        var offered = CapabilitiesFor(instanceJson);
+        foreach (var capability in new[] { ContentScope, NotesReadScope, NotesWriteScope })
+            if (offered.Contains(capability)) scopes.Add(capability);
         return scopes;
+    }
+
+    internal static HashSet<string> CapabilitiesFor(string? instanceJson)
+    {
+        if (string.IsNullOrWhiteSpace(instanceJson)) return new HashSet<string>(StringComparer.Ordinal);
+        var instance = Deserialize<InstanceInfo>(instanceJson!);
+        return instance.Capabilities == null ? new HashSet<string>(StringComparer.Ordinal)
+            : new HashSet<string>(instance.Capabilities.Keys, StringComparer.Ordinal);
+    }
+
+    internal static async Task<HashSet<string>> SupportedCapabilitiesAsync(string apiUrl, CancellationToken token)
+    {
+        using (ApiConnection.UseCancellation(token))
+        {
+            try { return CapabilitiesFor(await SendAsync(apiUrl, Base + "/instance", "GET", null, null).ConfigureAwait(false)); }
+            catch (AccountLinkException ex) when (ex.StatusCode == 404) { return CapabilitiesFor(null); }
+        }
     }
 
     /// <summary>True when the server offers desktop sign-in (older servers need an API key).</summary>
@@ -63,7 +83,7 @@ internal static class AccountLink
         using (ApiConnection.UseCancellation(cancellationToken))
         {
             try { instance = await SendAsync(baseUrl, Base + "/instance", "GET", null, null).ConfigureAwait(false); }
-            catch (AccountLinkException) { }
+            catch (AccountLinkException ex) when (ex.StatusCode == 404) { }
         }
         var body = Serialize(new DesktopAccessBody
         {
@@ -258,6 +278,7 @@ internal static class AccountLink
     [DataContract] private sealed class InstanceInfo
     {
         [DataMember(Name = "desktop_apps")] public List<string>? DesktopApps { get; set; }
+        [DataMember(Name = "capabilities")] public Dictionary<string, string>? Capabilities { get; set; }
     }
 
     [DataContract] private sealed class ProfileInfo

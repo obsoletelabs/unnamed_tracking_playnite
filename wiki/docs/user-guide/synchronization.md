@@ -9,9 +9,10 @@ context menu. Selected-game sync uses the same client, matching, ignore filter,
 and cancellation rules as full sync.
 
 The extension sends Playnite metadata and state to your authenticated account.
-It creates missing games and updates linked games. This is one-way library sync:
-it does not import remote edits into Playnite. A subsequent upload can overwrite
-remote edits to the mapped fields. Other application-only fields are left alone.
+It creates missing games and updates linked games. Mapped metadata flows from
+Playnite to the app, and a subsequent upload can overwrite remote edits to those
+fields. The dedicated Playnite note synchronizes in both directions as described
+below. Other application-only fields are left alone.
 
 GUID matching keeps the game linked when its title changes. The remote storage
 folder stays stable after linking. Ambiguous duplicate GUIDs or folders belonging
@@ -26,6 +27,35 @@ or blank status uses playtime to choose `PLAYED` or `BACKLOG`. The
 Available covers and backgrounds are uploaded as key art and banner. Artwork
 failures appear as warnings after a successful metadata update; they can be
 retried by running another library sync.
+
+## Two-way notes
+
+Playnite has one Notes field. On a host offering both `notes.read` and `notes.write`,
+it synchronizes with the ordinary Markdown note named **Playnite** on the matched
+game. Other app notes remain independent. Approve both capabilities when connecting,
+or use **Review app permissions** for an older connection. Full, selected-game,
+quick-edit and game-stop sync all use the same note reconciliation.
+
+When only one side changed since the last successful sync, its text updates the
+other side. When both changed, the local text is saved as a **Playnite conflict …**
+note before the current app note is pulled into Playnite. The same rule applies on
+first sync when both sides contain different nonempty text. Conflict copies are
+ordinary notes you can review and edit. Retries reuse an identical conflict copy;
+an edited copy is never overwritten. Conditional writes prevent an intervening
+remote edit from being lost. Editing Playnite's note while a pull runs keeps the
+new local edit and reports a warning so the next sync can reconcile it.
+
+Deleting the app's Playnite note clears the local counterpart; a simultaneous local
+edit is first retained as a conflict copy. Clearing Playnite's Notes updates the
+app note to empty. Other notes and conflict copies are never deleted by sync.
+The extension keeps only revision hashes in `note-sync.json` in its plugin data
+directory, written atomically. A damaged baseline stops note sync with a warning
+and is retained for repair; game metadata sync remains available.
+
+Missing permissions, unsupported hosts and note failures appear as warnings and
+keep local text. Older hosts still receive the legacy `notes` game field, which
+does not itself populate the app's Notes tab. Upgrade the host and approve note
+access for visible, two-way Markdown notes.
 
 ## Preview
 

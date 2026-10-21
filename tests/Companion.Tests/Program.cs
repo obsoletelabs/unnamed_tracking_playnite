@@ -12,7 +12,7 @@ using Playnite.SDK;
 using Playnite.SDK.Models;
 using UnnamedTrackingPlaynite;
 
-internal static class Program
+internal static partial class Program
 {
     private static int assertions;
     private static readonly TestLogger Log = new TestLogger();
@@ -35,8 +35,14 @@ internal static class Program
         throw new Exception("Expected " + typeof(T).Name);
     }
 
-    private static async Task Main()
+    private static async Task Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--live-notes")
+        {
+            await LiveNotesHttp(args[1]);
+            Console.WriteLine("Passed " + assertions + " assertions against the isolated live host.");
+            return;
+        }
         StatusAndIdentity();
         await ContentUploads();
         ConfigurationAndPaths();
@@ -45,6 +51,7 @@ internal static class Program
         await ObservationsHttp();
         await SaveHttp();
         await SignInHttp();
+        await NotesHttp();
         Console.WriteLine("Passed " + assertions + " assertions against production synchronization/save helpers.");
     }
 
@@ -421,6 +428,10 @@ internal static class Program
         Check(!AccountLink.ScopesFor("{\"desktop_apps\":[\"playnite\"],\"capabilities\":{\"library.sync\":\"x\"}}").Contains("content.write"), "Older server: no content capability");
         Check(AccountLink.ScopesFor("{\"capabilities\":{\"library.sync\":\"x\",\"content.write\":\"y\"}}").Contains("content.write"), "Offered capability is requested");
         Check(!AccountLink.ScopesFor(null).Contains("content.write") && AccountLink.ScopesFor(null).Contains("library.sync"), "Unknown instance keeps the base scopes");
+        Check(!AccountLink.CapabilitiesFor("{\"other\":{\"content.write\":\"not an advertised capability\"}}").Contains("content.write"), "Only the actual capability map proves server support");
+        var noteScopes = AccountLink.ScopesFor("{\"capabilities\":{\"notes.read\":\"read\",\"notes.write\":\"write\"}}");
+        Check(noteScopes.Contains("notes.read") && noteScopes.Contains("notes.write"), "Offered note capabilities are requested for fresh consent");
+        Check(!noteScopes.Contains("content.write"), "Missing optional capabilities are never inferred");
 
         using var temp = new TemporaryDirectory();
         var remote = Guid.NewGuid();

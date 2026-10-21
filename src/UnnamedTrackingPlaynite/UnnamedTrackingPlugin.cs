@@ -36,9 +36,22 @@ public sealed partial class UnnamedTrackingPlugin : GenericPlugin
         };
 
         _logger = LogManager.GetLogger();
-        _syncClient = new UnnamedTrackingSyncClient(_logger, api);
         _saveSync = new SaveSyncManager(GetPluginUserDataPath(), _logger);
         Settings = new UnnamedTrackingSettings(this);
+        _syncClient = new UnnamedTrackingSyncClient(_logger, api, GetPluginUserDataPath(), ApplyNoteAsync,
+            () => Settings.HasScope(AccountLink.NotesReadScope) && Settings.HasScope(AccountLink.NotesWriteScope));
+    }
+
+    private async Task<bool> ApplyNoteAsync(Guid gameId, string expected, string content)
+    {
+        return await PlayniteApi.MainView.UIDispatcher.InvokeAsync(() =>
+        {
+            var game = PlayniteApi.Database.Games.Get(gameId);
+            if (game == null || !string.Equals(game.Notes ?? string.Empty, expected, StringComparison.Ordinal)) return false;
+            game.Notes = content;
+            PlayniteApi.Database.Games.Update(game);
+            return true;
+        });
     }
 
     public override IEnumerable<MainMenuItem> GetMainMenuItems(GetMainMenuItemsArgs args)
