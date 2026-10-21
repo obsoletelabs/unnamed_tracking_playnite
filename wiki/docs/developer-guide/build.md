@@ -29,6 +29,21 @@ the existing .NET Framework SDK-reference compatibility warning is scoped to the
 test dependency. The extension's warning-as-error policy remains intact. Headless
 tests do not instantiate Playnite/WPF/CEF or prove runtime integration.
 
+For an explicitly approved disposable localhost account/game, an opt-in real-host
+check uses the same production transport and note reconciliation:
+
+```powershell
+./tests/Companion.Tests/bin/Release/net462/Companion.Tests.exe --live-notes C:/private-test/live-fixture.json
+```
+
+The private JSON fixture contains `base_url`, `credential`, `remote_id`, `local_id`
+and `foreign_id` (another synthetic user's game). The grant needs `library.sync`,
+`notes.read`, `notes.write` and `content.write`. This check writes the target game's
+Playnite/Independent notes, conflict copies, a synthetic PNG and a text document;
+it is not safe for a real library. Use an expiring test grant, revoke it afterwards,
+and keep the fixture outside the repository. Non-loopback URLs are refused. CI
+and the ordinary harness never run this check automatically.
+
 The extension output is `src/UnnamedTrackingPlaynite/bin/Release/net462/`.
 `./pack.ps1` builds and validates it, then stages exactly the assembly and manifest
 and writes `artifacts/UnnamedTrackingPlaynite-0.2.0.pext`. No Playnite Toolbox

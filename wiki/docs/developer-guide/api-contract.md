@@ -65,6 +65,24 @@ column; every other application route refuses it.
 | Rename legacy archive | `PATCH /api/game/{id}/archives/{archive_id}` | `saves.write` | JSON `name`; successful HTTP response |
 | Upload save version | `POST /api/game/{id}/archives/{archive_id}/versions` | `saves.write` | Multipart `file`, successful HTTP response |
 | Download version | `GET /api/game/{id}/archives/{archive_id}/versions/{version_id}/download` | `saves.read` | ZIP bytes |
+| Read named note | `GET /api/game/{id}/notes/Playnite` | `notes.read` | Exact UTF-8 Markdown; 404 if absent; strong SHA-256 ETag |
+| Create named note/conflict copy | `POST /api/game/{id}/notes/{name}` | `notes.write` | JSON `content`; 201 created, 409 when the name exists |
+| Update shared note | `PUT /api/game/{id}/notes/Playnite` | `notes.write` | JSON `content` and `expected_sha256`; 409 if the revision changed |
+
+Note access and `content.write` are optional capabilities requested only when the
+instance's actual `capabilities` map advertises them. Existing grants are never
+expanded locally. Both note scopes are needed for two-way reconciliation. A 403,
+unsupported host or damaged local baseline reports a warning while preserving the
+local note and allowing ordinary library metadata sync. A 404 is treated as a
+missing note only after capability negotiation. Note deletion and history are not
+part of the delegated note contract.
+
+The companion hashes exact UTF-8 note text, retaining CRLF and a leading BOM.
+Conditional writes and the UI dispatcher's local compare-and-set protect changes
+made between read and write. Conflict copies are created without overwrite, and
+an existing identical copy is reused on retry. Revision baselines are isolated by
+normalized server URL, remote game UUID and local Playnite UUID; credentials and
+note bodies are not stored in that baseline file.
 
 The game payload includes `platform`, the first Playnite platform name (at most 50
 characters, omitted when there is none), so the server can name and group copies of

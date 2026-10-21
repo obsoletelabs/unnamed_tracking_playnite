@@ -41,3 +41,34 @@ browser sign-in through a `playnite://` link, the signed-in settings view, and a
 encrypted stored credential. Library sync, saves and the embedded view were exercised
 against the same server through the extension's own code outside Playnite, not yet
 inside a Playnite library. The checklist remains an explicit release gate.
+
+## Note synchronization and access review, 2026-10-20
+
+Verified with the updated extension on the PC's installed **Playnite 10.60** runtime,
+copied into a separate test directory with a disposable profile and a separate IPC
+endpoint. The normal Playnite profile and library were preserved. A synthetic ordinary
+user on a local host received an explicitly approved one-hour test connection.
+
+| View | Evidence |
+| --- | --- |
+| Existing connections can review newly offered permissions | ![Review app permissions](../assets/playnite-notes/settings-review-access.png) |
+| Native settings connection test succeeds | ![Connection successful](../assets/playnite-notes/connection-success.png) |
+| Original note entered in the native test game | ![Native note before synchronization](../assets/playnite-notes/native-note-before.png) |
+| Selected-game synchronization succeeds | ![One game synchronized](../assets/playnite-notes/native-sync-success.png) |
+| A subsequent web edit is pulled into Playnite's actual Notes field | ![Web edit visible in Playnite](../assets/playnite-notes/native-note-after-pull.png) |
+| Concurrent edits preserve both values and leave other app notes independent | ![Shared note, conflict copy and unrelated note](../assets/playnite-notes/app-note-conflicts.png) |
+
+The native run created one synthetic game, pushed its note into the host's named
+Markdown note and then pulled a conditional web edit into the real Playnite database
+through the UI dispatcher. Both selected-game runs reported one success without
+warnings. The permission-review button was captured; renewed browser consent was
+verified through the public protocol rather than clicked in the native UI.
+
+The production transport also passed 15 assertions against the actual host as the
+ordinary user: creation, pull, conditional push, conflict preservation, unrelated-note
+preservation, rejection of stale writes, foreign-note denial, delete denial, and actual
+PNG/text-document uploads. The 293-assertion regression harness passed on both
+.NET Framework and the portable target. Audio/video uploads and the complete save
+checklist above were not rerun through the native UI in this session.
+The temporary grant was revoked after testing; the next request returned HTTP 401,
+and both local credential copies were removed.
