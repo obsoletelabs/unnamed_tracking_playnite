@@ -1,6 +1,10 @@
 # Release notes
 
-## Unreleased
+## 0.3.0 — 2026-10-30
+
+- Report the built extension version during the existing host connection probe so remote-start setup can distinguish outdated and unreported PCs. Headers are ignored by older hosts; existing synchronization remains available.
+
+- Add optional browser-to-PC game launching through remote launch v1. Enable receiving explicitly, approve games.launch and confirm on the PC by default. Requests use local Playnite GUIDs and the supported SDK, expire after 60 seconds and never carry paths or commands. Durable receipts prevent replay after a lost acknowledgement or restart. Requires host #319; older hosts keep existing synchronization. Breaking changes: None.
 
 - **Quick actions in the game menu.** Set a status, rate (0-10), add a dated note, add screenshots/clips/audio
   and add documents to a game without opening the website; open the game's page in your browser. Status, score and

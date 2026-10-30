@@ -13,6 +13,9 @@
     <Compile Include="../../src/UnnamedTrackingPlaynite/ApiConnection.cs" Link="Production/ApiConnection.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/GameContentUploader.cs" Link="Production/GameContentUploader.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/QuickEdits.cs" Link="Production/QuickEdits.cs" />
+    <Compile Include="../../src/UnnamedTrackingPlaynite/RemoteLaunchClient.cs" Link="Production/RemoteLaunchClient.cs" />
+    <Compile Include="../../src/UnnamedTrackingPlaynite/RemoteLaunchJournal.cs" Link="Production/RemoteLaunchJournal.cs" />
+    <Compile Include="../../src/UnnamedTrackingPlaynite/RemoteLaunchReceiver.cs" Link="Production/RemoteLaunchReceiver.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/AccountLink.cs" Link="Production/AccountLink.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/PlayniteNotesSync.cs" Link="Production/PlayniteNotesSync.cs" />
     <Compile Include="../../src/UnnamedTrackingPlaynite/UnnamedTrackingSyncClient.cs" Link="Production/UnnamedTrackingSyncClient.cs" />

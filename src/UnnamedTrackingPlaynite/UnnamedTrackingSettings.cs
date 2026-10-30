@@ -23,6 +23,10 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
     private string editingAuthValue = string.Empty;
     private string ignoreTag = "trackingapp_ignore";
     private string editingIgnoreTag = "trackingapp_ignore";
+    private bool remoteLaunchEnabled;
+    private bool confirmRemoteLaunch = true;
+    private string remoteLaunchStatus = "Remote launch is disabled.";
+    private bool editingConfirmRemoteLaunch;
     private bool syncOnStartup;
     private bool syncOnGameStopped;
     private bool editingSyncOnStartup;
@@ -99,6 +103,25 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         set => SetValue(ref ignoreTag, value ?? string.Empty);
     }
 
+    public bool RemoteLaunchEnabled
+    {
+        get => remoteLaunchEnabled;
+        set => SetValue(ref remoteLaunchEnabled, value);
+    }
+
+    public bool ConfirmRemoteLaunch
+    {
+        get => confirmRemoteLaunch;
+        set => SetValue(ref confirmRemoteLaunch, value);
+    }
+
+    [DontSerialize]
+    public string RemoteLaunchStatus
+    {
+        get => remoteLaunchStatus;
+        set => SetValue(ref remoteLaunchStatus, value);
+    }
+
     public bool SyncOnStartup
     {
         get => syncOnStartup;
@@ -146,6 +169,8 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
                 GrantedScopes = savedSettings.GrantedScopes;
                 DeviceId = savedSettings.DeviceId;
                 IgnoreTag = savedSettings.IgnoreTag ?? "trackingapp_ignore";
+                RemoteLaunchEnabled = savedSettings.RemoteLaunchEnabled;
+                ConfirmRemoteLaunch = savedSettings.ConfirmRemoteLaunch;
                 SyncOnStartup = savedSettings.SyncOnStartup;
                 SyncOnGameStopped = savedSettings.SyncOnGameStopped;
             }
@@ -166,6 +191,7 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         editingApiUrl = ApiUrl;
         editingAuthValue = AuthValue;
         editingIgnoreTag = IgnoreTag;
+        editingConfirmRemoteLaunch = ConfirmRemoteLaunch;
         editingSyncOnStartup = SyncOnStartup;
         editingSyncOnGameStopped = SyncOnGameStopped;
     }
@@ -175,6 +201,7 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         ApiUrl = editingApiUrl;
         AuthValue = editingAuthValue;
         IgnoreTag = editingIgnoreTag;
+        ConfirmRemoteLaunch = editingConfirmRemoteLaunch;
         SyncOnStartup = editingSyncOnStartup;
         SyncOnGameStopped = editingSyncOnGameStopped;
     }
@@ -185,19 +212,27 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         AuthValue = AuthValue.Trim();
         IgnoreTag = IgnoreTag.Trim();
         plugin?.SavePluginSettings(this);
+        if (plugin != null) _ = plugin.RefreshRemoteLaunchAsync();
     }
 
     /// <summary>
     /// Signs in through the browser. <paramref name="status"/> receives progress text
     /// (including the address to open if the browser did not start).
     /// </summary>
-    public async Task<bool> SignInAsync(Action<string> status, CancellationToken cancellationToken)
+    public async Task<bool> SignInAsync(Action<string> status, CancellationToken cancellationToken, bool requestRemoteLaunch = false)
+    {
+        if (plugin != null) await plugin.StopRemoteLaunchAsync().ConfigureAwait(true);
+        try { return await CompleteSignInAsync(status, cancellationToken, requestRemoteLaunch).ConfigureAwait(true); }
+        finally { if (plugin != null) await plugin.RefreshRemoteLaunchAsync().ConfigureAwait(true); }
+    }
+
+    private async Task<bool> CompleteSignInAsync(Action<string> status, CancellationToken cancellationToken, bool requestRemoteLaunch)
     {
         var server = ApiConnection.ValidateBaseUrl(ApiUrl);
         status("Checking the server...");
         if (!await AccountLink.SupportsSignInAsync(server, cancellationToken).ConfigureAwait(true))
             throw new InvalidOperationException("This server does not offer Playnite sign-in yet. Update the server, or use an API key below.");
-        var pending = await AccountLink.StartAsync(server, Environment.MachineName, DeviceId, cancellationToken).ConfigureAwait(true);
+        var pending = await AccountLink.StartAsync(server, Environment.MachineName, DeviceId, cancellationToken, requestRemoteLaunch || RemoteLaunchEnabled).ConfigureAwait(true);
         // The page address is not secret (the verifier never leaves Playnite); log it so
         // people without a default browser can still finish signing in.
         LogManager.GetLogger().Info("Opening the Unnamed Tracking sign-in page: " + pending.VerificationUrl);
@@ -209,12 +244,19 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
             status(result.Outcome == "denied" ? "Sign-in was denied in the browser." : "The sign-in request expired. Try again.");
             return false;
         }
+        var previousCredential = CredentialProtection.Unprotect(ProtectedCredential);
+        var previousServer = SignedInServer;
         ProtectedCredential = CredentialProtection.Protect(result.Credential!);
         GrantedScopes = string.Join(" ", result.Scopes);
         SignedInServer = server;
         try { ConnectedAs = await AccountLink.DisplayNameAsync(server, result.Credential!, cancellationToken).ConfigureAwait(true); }
         catch (Exception) { ConnectedAs = string.Empty; } // profile.read may have been unticked
         plugin?.SavePluginSettings(this);
+        if (previousCredential != null && !string.IsNullOrEmpty(previousServer))
+        {
+            try { await AccountLink.SignOutAsync(previousServer, previousCredential, cancellationToken).ConfigureAwait(true); }
+            catch (Exception) { LogManager.GetLogger().Warn("The previous Playnite grant could not be revoked. Remove it in Connected apps."); }
+        }
         status(AccountSummary);
         return true;
     }
@@ -222,6 +264,9 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
     /// <summary>Signs out here and revokes this Playnite's access on the server.</summary>
     public async Task SignOutAsync(CancellationToken cancellationToken)
     {
+        RemoteLaunchEnabled = false;
+        if (plugin != null) await plugin.StopRemoteLaunchAsync().ConfigureAwait(true);
+        RemoteLaunchStatus = "Remote launch is disabled.";
         var credential = CredentialProtection.Unprotect(ProtectedCredential);
         var server = SignedInServer;
         ProtectedCredential = string.Empty;
@@ -231,6 +276,28 @@ public sealed class UnnamedTrackingSettings : ObservableObject, ISettings
         plugin?.SavePluginSettings(this);
         if (credential != null && !string.IsNullOrEmpty(server))
             await AccountLink.SignOutAsync(server, credential, cancellationToken).ConfigureAwait(true);
+    }
+
+    public async Task SetRemoteLaunchEnabledAsync(bool enabled, Action<string> status, CancellationToken token)
+    {
+        if (plugin == null) throw new InvalidOperationException("The plugin is not initialized.");
+        if (!enabled)
+        {
+            RemoteLaunchEnabled = false;
+            plugin.SavePluginSettings(this);
+            await plugin.StopRemoteLaunchAsync().ConfigureAwait(true);
+            RemoteLaunchStatus = "Remote launch is disabled.";
+            return;
+        }
+        if (!IsSignedIn || !HasScope(RemoteLaunchClient.Scope))
+        {
+            if (!await SignInAsync(status, token, true).ConfigureAwait(true)) return;
+        }
+        if (!IsSignedIn || !HasScope(RemoteLaunchClient.Scope))
+            throw new InvalidOperationException("Remote launch was not approved. Review app permissions and select Receive launch requests.");
+        RemoteLaunchEnabled = true;
+        plugin.SavePluginSettings(this);
+        await plugin.RefreshRemoteLaunchAsync().ConfigureAwait(true);
     }
 
     private static void OpenInBrowser(string url)

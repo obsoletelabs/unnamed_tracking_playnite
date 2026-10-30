@@ -1,7 +1,7 @@
 # Unnamed Tracking for Playnite
 
 A Playnite 10 companion extension for library, two-way notes and save synchronization
-with an Unnamed Tracking account. **0.2.0 restores the recovered release.** The
+with an Unnamed Tracking account. **0.3.0 adds optional remote start; 0.2.0 restored the recovered release.** The
 extension keeps the existing `net462` / PlayniteSDK 6.17.0 generic-plugin model.
 
 The maintained repository is [obsoletelabs/unnamed_tracking_playnite](https://github.com/obsoletelabs/unnamed_tracking_playnite).
@@ -19,6 +19,7 @@ the later changes concern release packaging, build configuration and documentati
 - Preview, per-game progress/cancellation, ignore tags, startup and game-stop sync.
 - Source observations (platform, last played, installed, inventory) through the versioned host contract; falls back to the original routes on an older host.
 - Quick actions from the game menu: set status, rate, add notes, screenshots, clips and documents, open in browser.
+- Optional [remote launch from a browser](wiki/docs/user-guide/remote-launch.md), with explicit permission, local confirmation and durable duplicate protection. Requires the updated host.
 - Multiple local save folders/files, versioned remote archives, automatic transfers,
   durable restore backups and rollback on ordinary failure/cancellation.
 - Existing save sidebar with access to the embedded website through normal sign-in.
@@ -65,12 +66,12 @@ if ($LASTEXITCODE -ne 0) { throw "Regression tests failed" }
 ./tests/test-packaging.ps1
 ```
 
-The PEXT is `artifacts/UnnamedTrackingPlaynite-0.2.0.pext` and contains exactly
+The PEXT is `artifacts/UnnamedTrackingPlaynite-0.3.0.pext` and contains exactly
 `UnnamedTrackingPlaynite.dll` and `extension.yaml` at its root. Toolbox is optional.
 For portable helper tests use `dotnet run --project tests/Companion.Tests -c Release -f net8.0`.
 No test framework or new extension runtime dependency is required.
 
-Release builds can use `./pack.ps1 -Version 0.2.0`. A `v<major.minor.patch>` tag
+Release builds can use `./pack.ps1 -Version 0.3.0`. A `v<major.minor.patch>` tag
 sets the CI build version; MSBuild stamps the assembly and output manifest,
 and packaging validates that exact version before publishing the matching PEXT.
 

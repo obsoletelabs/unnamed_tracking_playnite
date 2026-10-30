@@ -41,6 +41,7 @@ internal static class ApiConnection
     {
         Token.ThrowIfCancellationRequested();
         var request = (HttpWebRequest)WebRequest.Create(url);
+        request.Headers["X-Playnite-Extension-Version"] = typeof(ApiConnection).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
         request.AllowAutoRedirect = false;
         request.Timeout = 60000;
         request.ReadWriteTimeout = 60000;

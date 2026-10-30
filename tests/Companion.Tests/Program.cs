@@ -52,6 +52,7 @@ internal static partial class Program
         await SaveHttp();
         await SignInHttp();
         await NotesHttp();
+        await RemoteLaunchHttp();
         Console.WriteLine("Passed " + assertions + " assertions against production synchronization/save helpers.");
     }
 
