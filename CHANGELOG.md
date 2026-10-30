@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased (0.3.0)
+## 0.3.0 — 2026-10-30
 
 - Report the built extension version during the existing host connection probe so remote-start setup can distinguish outdated and unreported PCs. Headers are ignored by older hosts; existing synchronization remains available.
 

@@ -1,6 +1,6 @@
 # Release process
 
-Version **0.2.0** restores the recovered release. The tag supplies the release
+Version **0.3.0** adds opt-in remote launch and compatible extension reporting. The recovered release remains documented below. The tag supplies the release
 version to MSBuild, which derives assembly/file versions and stamps the output
 manifest. The validators compare the expected release version, built assembly,
 file version, packaged manifest and PEXT filename. Normal main/PR builds use the
@@ -13,7 +13,7 @@ project's default version. Keep README and release notes current for releases.
 3. Verify release notes and all version metadata. Build the PEXT from a clean
    checkout and validate its actual entries. Inspect the resulting artifact.
 4. When release publication is explicitly intended, create and push a tag such as
-   `v0.2.0` on the reviewed commit. The PEXT workflow builds with `0.2.0` and
+   `v0.3.0` on the reviewed commit. The PEXT workflow builds with `0.3.0` and
    validates that exact version before publishing. Tags require major.minor.patch.
 5. Review the generated release notes and attachment, then test installation of
    that exact PEXT. Do not rebuild and silently replace an already distributed
