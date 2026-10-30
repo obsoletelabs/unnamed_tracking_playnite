@@ -28,3 +28,9 @@ The host dispatches each request at most once. The companion records its ID on d
 If the browser says the outcome is unknown, check the PC before deliberately requesting another launch. **Check this request** checks the original action after a transport error; it does not create a second one. A PC that went to sleep will not execute an old request when it wakes.
 
 Steam Remote Play remains a separate planned integration; remote launching does not open a stream.
+
+## Compatibility and the host's update prompt
+
+Use extension 0.3.0 or newer for remote start. Older extensions can still synchronize normally with the updated host. This extension also keeps its ordinary synchronization and legacy fallback on older hosts; only remote start requires the new host API.
+
+During the existing sync connection probe, 0.3.0 reports its built extension version. The host can show an update/setup popup for an outdated or unreported PC when you open remote start. Older builds did not report a version, so the host cannot infer their exact release. Sync after upgrading to refresh the report. Merely updating does not grant remote-launch permission or turn receiving on.

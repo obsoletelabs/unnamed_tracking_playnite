@@ -46,7 +46,7 @@ and the ordinary harness never run this check automatically.
 
 The extension output is `src/UnnamedTrackingPlaynite/bin/Release/net462/`.
 `./pack.ps1` builds and validates it, then stages exactly the assembly and manifest
-and writes `artifacts/UnnamedTrackingPlaynite-0.2.0.pext`. No Playnite Toolbox
+and writes `artifacts/UnnamedTrackingPlaynite-0.3.0.pext`. No Playnite Toolbox
 installation is required. An explicit `-ToolboxPath` retains Toolbox support;
 its output must pass the same package validator. Build/Toolbox failures fail the
 script. `-NoBuild` is for already-built output; version validation rejects stale

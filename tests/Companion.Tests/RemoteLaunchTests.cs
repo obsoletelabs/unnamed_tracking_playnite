@@ -14,6 +14,7 @@ internal static partial class Program
 
     private static async Task RemoteLaunchHttp()
     {
+        Check(ApiConnection.CreateRequest("https://example.test").Headers["X-Playnite-Extension-Version"] == typeof(ApiConnection).Assembly.GetName().Version?.ToString(3), "Requests report the built extension version without requiring a new host contract");
         var id = Guid.NewGuid(); var gameId = Guid.NewGuid(); var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var offered = "{\"capabilities\":{\"games.launch\":\"Receive\"}}";
         Check(!AccountLink.ScopesFor(offered).Contains("games.launch"), "Remote launch is not requested by default");
