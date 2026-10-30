@@ -27,6 +27,16 @@
             </Expander>
 
             <Separator Margin="0,15,0,15" />
+            <TextBlock Text="Remote launch" FontSize="16" FontWeight="SemiBold" />
+            <TextBlock Margin="0,6,0,8" Text="Launch games on this PC from your signed-in Unnamed Tracking browser. Playnite must remain open. Enabling requests a separate permission; API keys cannot receive launches." TextWrapping="Wrap" Opacity="0.7" />
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="EnableRemoteLaunchButton" Content="Enable remote launch…" Padding="12,4" Margin="0,0,8,0" Click="EnableRemoteLaunch_Click" />
+                <Button x:Name="DisableRemoteLaunchButton" Content="Disable remote launch" Padding="12,4" Click="DisableRemoteLaunch_Click" />
+            </StackPanel>
+            <CheckBox Margin="0,10,0,6" Content="Ask on this PC before each remote launch" IsChecked="{Binding ConfirmRemoteLaunch}" />
+            <TextBlock Text="Turn off confirmation only when you want unattended launches from your account. Existing game-start scripts and save-download safeguards still apply." TextWrapping="Wrap" Opacity="0.7" />
+            <TextBlock Margin="0,8,0,0" Text="{Binding RemoteLaunchStatus}" TextWrapping="Wrap" />
+            <Separator Margin="0,15,0,15" />
             <TextBlock Text="Automatic synchronization" FontSize="16" FontWeight="SemiBold" />
             <CheckBox Margin="0,8,0,4" Content="Sync the library when Playnite starts" IsChecked="{Binding SyncOnStartup}" />
             <CheckBox Margin="0,0,0,8" Content="Sync a game after it stops" IsChecked="{Binding SyncOnGameStopped}" />

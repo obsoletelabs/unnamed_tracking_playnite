@@ -19,6 +19,7 @@ the later changes concern release packaging, build configuration and documentati
 - Preview, per-game progress/cancellation, ignore tags, startup and game-stop sync.
 - Source observations (platform, last played, installed, inventory) through the versioned host contract; falls back to the original routes on an older host.
 - Quick actions from the game menu: set status, rate, add notes, screenshots, clips and documents, open in browser.
+- Optional [remote launch from a browser](wiki/docs/user-guide/remote-launch.md), with explicit permission, local confirmation and durable duplicate protection. Requires the updated host.
 - Multiple local save folders/files, versioned remote archives, automatic transfers,
   durable restore backups and rollback on ordinary failure/cancellation.
 - Existing save sidebar with access to the embedded website through normal sign-in.

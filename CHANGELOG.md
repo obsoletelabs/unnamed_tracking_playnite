@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add optional browser-to-PC game launching through remote launch v1. Enable receiving explicitly, approve games.launch and confirm on the PC by default. Requests use local Playnite GUIDs and the supported SDK, expire after 60 seconds and never carry paths or commands. Durable receipts prevent replay after a lost acknowledgement or restart. Requires host #319; older hosts keep existing synchronization. Breaking changes: None.
+
 - **Quick actions in the game menu.** Set a status, rate (0-10), add a dated note, add screenshots/clips/audio
   and add documents to a game without opening the website; open the game's page in your browser. Status, score and
   notes are Playnite's own fields and are pushed with the normal sync. Uploading files uses the new optional

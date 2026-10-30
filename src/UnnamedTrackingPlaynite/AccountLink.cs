@@ -34,12 +34,17 @@ internal static class AccountLink
     private const string Base = "/api/delegation/v1";
 
     /// <summary>The scopes to request, given the instance description the server returned.</summary>
-    internal static List<string> ScopesFor(string? instanceJson)
+    internal static List<string> ScopesFor(string? instanceJson, bool remoteLaunch = false)
     {
         var scopes = new List<string>(Scopes);
         var offered = CapabilitiesFor(instanceJson);
         foreach (var capability in new[] { ContentScope, NotesReadScope, NotesWriteScope })
             if (offered.Contains(capability)) scopes.Add(capability);
+        if (remoteLaunch)
+        {
+            if (!offered.Contains(RemoteLaunchClient.Scope)) throw new InvalidOperationException("Update the server before enabling remote launch.");
+            scopes.Add(RemoteLaunchClient.Scope);
+        }
         return scopes;
     }
 
@@ -75,7 +80,7 @@ internal static class AccountLink
     }
 
     /// <summary>Starts consent. Open <see cref="PendingSignIn.VerificationUrl"/> in the browser.</summary>
-    internal static async Task<PendingSignIn> StartAsync(string apiUrl, string deviceName, string deviceId, CancellationToken cancellationToken)
+    internal static async Task<PendingSignIn> StartAsync(string apiUrl, string deviceName, string deviceId, CancellationToken cancellationToken, bool remoteLaunch = false)
     {
         var baseUrl = ApiConnection.ValidateBaseUrl(apiUrl);
         var verifier = NewVerifier();
@@ -87,7 +92,7 @@ internal static class AccountLink
         }
         var body = Serialize(new DesktopAccessBody
         {
-            Scopes = ScopesFor(instance),
+            Scopes = ScopesFor(instance, remoteLaunch),
             CodeChallenge = Challenge(verifier),
             DeviceName = DeviceLabel(deviceName),
             DeviceId = deviceId
@@ -193,7 +198,7 @@ internal static class AccountLink
         return name.Length > 100 ? name.Substring(0, 100) : name;
     }
 
-    private static async Task<string> SendAsync(string apiUrl, string path, string method, string? body, string? credential)
+    internal static async Task<string> SendAsync(string apiUrl, string path, string method, string? body, string? credential, int maxCharacters = 1048576)
     {
         var request = ApiConnection.CreateRequest(ApiConnection.ValidateBaseUrl(apiUrl) + path);
         using var registration = ApiConnection.RegisterRequest(request);
@@ -213,7 +218,17 @@ internal static class AccountLink
         {
             using (var response = ApiConnection.EnsureSuccess((HttpWebResponse)await request.GetResponseAsync().ConfigureAwait(false)))
             using (var reader = new StreamReader(response.GetResponseStream() ?? Stream.Null, Encoding.UTF8))
-                return await reader.ReadToEndAsync().ConfigureAwait(false);
+            {
+                var text = new StringBuilder();
+                var buffer = new char[4096];
+                int length;
+                while ((length = await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                {
+                    if (text.Length + length > maxCharacters) throw new InvalidDataException("The server response is too large.");
+                    text.Append(buffer, 0, length);
+                }
+                return text.ToString();
+            }
         }
         catch (WebException) when (ApiConnection.Token.IsCancellationRequested) { throw new OperationCanceledException(ApiConnection.Token); }
         catch (WebException ex)
@@ -234,13 +249,13 @@ internal static class AccountLink
         _ => "The server returned HTTP " + status + "."
     };
 
-    private static string Serialize<T>(T value)
+    internal static string Serialize<T>(T value)
     {
         var serializer = new DataContractJsonSerializer(typeof(T));
         using (var stream = new MemoryStream()) { serializer.WriteObject(stream, value); return Encoding.UTF8.GetString(stream.ToArray()); }
     }
 
-    private static T Deserialize<T>(string json)
+    internal static T Deserialize<T>(string json)
     {
         if (string.IsNullOrWhiteSpace(json)) throw new InvalidDataException("The server returned an empty response.");
         var serializer = new DataContractJsonSerializer(typeof(T), new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true });

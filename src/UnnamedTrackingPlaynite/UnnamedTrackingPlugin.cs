@@ -275,6 +275,7 @@ public sealed partial class UnnamedTrackingPlugin : GenericPlugin
     public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
     {
         _logger.Info("Unnamed Tracking plugin loaded.");
+        _ = RefreshRemoteLaunchAsync();
         // playnite://unnamedtracking/settings opens these settings and .../sync syncs the
         // library, so the web app (or a shortcut) can hand off to Playnite.
         PlayniteApi.UriHandler.RegisterSource(UriSource, HandleUri);

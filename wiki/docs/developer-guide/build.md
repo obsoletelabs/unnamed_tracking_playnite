@@ -92,3 +92,9 @@ python -m mkdocs serve -f wiki/mkdocs.yml
 
 The Material theme and MkDocs are documentation-only dependencies, pinned in the
 wiki requirements. There is no website deployment workflow in this change.
+
+## Remote launch verification
+
+The ordinary harness covers scope opt-in, version discovery, bounded HTTP responses, monotonic deadlines, durable acknowledgement retries, exclusive journal access and duplicate suppression across restart. The production extension was also loaded in an isolated Playnite 10.60 Windows profile against a disposable localhost host: the browser queued the existing marker-game GUID, the receiver called the real SDK, the harmless marker executable started once per deliberate action, and the browser received accepted. This proves the local browser/host/SDK path; it does not verify a public deployment or a physical phone over an external network.
+
+The optional tests/remote-launch-playnite-smoke.ps1 is a Playnite startup-script fixture, never an ordinary standalone script. It requires a separate --userdatadir profile, the built extension loaded there and a private JSON fixture containing base_url (loopback only), credential (expiring desktop grant with profile.read/library.sync/games.launch), local_id, marker_exe, ready_path and failure_path. Set that profile's AppStartupScript to invoke the fixture with -FixturePath. It creates only that local test game, encrypts its synthetic credential and enables receiving without confirmation in that disposable profile. Use a harmless marker executable; never point it at a real library or share its fixture. An existing normal Playnite instance must be closed because Playnite permits one instance.

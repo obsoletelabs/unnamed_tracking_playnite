@@ -29,6 +29,8 @@ public partial class UnnamedTrackingSettingsView : UserControl
         ReviewAccessButton.Visibility = signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
         CancelSignInButton.Visibility = waiting ? Visibility.Visible : Visibility.Collapsed;
         SignOutButton.Visibility = signedIn && !waiting ? Visibility.Visible : Visibility.Collapsed;
+        EnableRemoteLaunchButton.IsEnabled = !waiting && !string.IsNullOrWhiteSpace(settings?.ApiUrl);
+        DisableRemoteLaunchButton.IsEnabled = !waiting && settings?.RemoteLaunchEnabled == true;
         SignInButton.IsEnabled = !string.IsNullOrWhiteSpace(settings?.ApiUrl);
         if (settings != null && !signedIn && !string.IsNullOrEmpty(settings.AuthValue)) ApiKeyExpander.IsExpanded = true;
     }
@@ -59,6 +61,26 @@ public partial class UnnamedTrackingSettingsView : UserControl
             signIn = null;
             RefreshAccount();
         }
+    }
+
+    private async void EnableRemoteLaunch_Click(object sender, RoutedEventArgs e)
+    {
+        if (!(DataContext is UnnamedTrackingSettings settings) || signIn != null) return;
+        signIn = new CancellationTokenSource(TimeSpan.FromMinutes(11));
+        RefreshAccount();
+        try { await settings.SetRemoteLaunchEnabledAsync(true, ShowSignInStatus, signIn.Token); }
+        catch (OperationCanceledException) { ShowSignInStatus("Remote launch setup cancelled."); }
+        catch (Exception ex) { ShowSignInStatus("Remote launch could not be enabled: " + ex.Message); }
+        finally { signIn.Dispose(); signIn = null; RefreshAccount(); }
+    }
+
+    private async void DisableRemoteLaunch_Click(object sender, RoutedEventArgs e)
+    {
+        if (!(DataContext is UnnamedTrackingSettings settings)) return;
+        DisableRemoteLaunchButton.IsEnabled = false;
+        try { await settings.SetRemoteLaunchEnabledAsync(false, ShowSignInStatus, CancellationToken.None); }
+        catch (Exception ex) { ShowSignInStatus("Remote launch stopped locally: " + ex.Message); }
+        finally { RefreshAccount(); }
     }
 
     private void CancelSignInButton_Click(object sender, RoutedEventArgs e) => signIn?.Cancel();
